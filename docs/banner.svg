@@ -1,0 +1,103 @@
+<svg width="1280" height="640" viewBox="0 0 1280 640" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="glowAccent" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#2ee6a6" stop-opacity="0.20"/>
+      <stop offset="100%" stop-color="#2ee6a6" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowCyan" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="hairline" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#2ee6a6" stop-opacity="0.9"/>
+      <stop offset="60%" stop-color="#283042" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#283042" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- background -->
+  <rect width="1280" height="640" fill="#0d1117"/>
+  <rect width="1280" height="640" fill="#0d1117"/>
+  <circle cx="120" cy="80" r="420" fill="url(#glowAccent)"/>
+  <circle cx="1200" cy="600" r="420" fill="url(#glowCyan)"/>
+
+  <!-- subtle decorative concentric signal arcs, bottom-right -->
+  <g fill="none" stroke="#2ee6a6" stroke-opacity="0.07" stroke-width="14">
+    <circle cx="1240" cy="610" r="120"/>
+    <circle cx="1240" cy="610" r="210"/>
+    <circle cx="1240" cy="610" r="300"/>
+    <circle cx="1240" cy="610" r="390"/>
+  </g>
+
+  <!-- outer rounded frame -->
+  <rect x="14" y="14" width="1252" height="612" rx="22" fill="none" stroke="#283042" stroke-width="2"/>
+
+  <!-- icon badge: WiFi signal over a USB adapter -->
+  <g>
+    <circle cx="150" cy="150" r="66" fill="#161b22" stroke="#2ee6a6" stroke-width="2"/>
+    <!-- usb adapter body -->
+    <rect x="139" y="170" width="22" height="34" rx="5" fill="#0d1117" stroke="#38bdf8" stroke-width="3"/>
+    <rect x="146" y="200" width="8" height="12" rx="2" fill="#38bdf8"/>
+    <!-- signal arcs -->
+    <g fill="none" stroke="#2ee6a6" stroke-width="5" stroke-linecap="round">
+      <path d="M 137 158 A 18 18 0 0 1 163 158"/>
+      <path d="M 126 146 A 34 34 0 0 1 174 146"/>
+      <path d="M 115 134 A 50 50 0 0 1 185 134"/>
+    </g>
+    <circle cx="150" cy="166" r="5" fill="#2ee6a6"/>
+  </g>
+
+  <!-- wordmark -->
+  <text x="246" y="150" font-family="Helvetica, Arial, sans-serif" font-size="92" font-weight="800">
+    <tspan fill="#2ee6a6">Air</tspan><tspan fill="#e6edf3">Driver</tspan>
+  </text>
+  <text x="250" y="200" font-family="Helvetica, Arial, sans-serif" font-size="27" fill="#b9c2cc">
+    Auto-installs WiFi-adapter drivers on Kali Linux &amp; Parrot OS
+  </text>
+
+  <!-- hairline -->
+  <rect x="250" y="226" width="900" height="2" fill="url(#hairline)"/>
+
+  <!-- terminal one-liner -->
+  <text x="250" y="294" font-family="Menlo, 'DejaVu Sans Mono', monospace" font-size="25">
+    <tspan fill="#2ee6a6">$ </tspan><tspan fill="#e6edf3">sudo airdriver</tspan><tspan fill="#6e7681">  &#8594;  </tspan><tspan fill="#3fb950">RTL8812AU detected, driver installed</tspan>
+  </text>
+
+  <!-- feature pills -->
+  <g font-family="Helvetica, Arial, sans-serif" font-size="21" font-weight="600">
+    <g>
+      <rect x="200" y="338" width="172" height="46" rx="23" fill="#11221c" stroke="#2ee6a6" stroke-width="1.4"/>
+      <text x="286" y="368" fill="#c9f5e6" text-anchor="middle">Auto-detect</text>
+    </g>
+    <g>
+      <rect x="386" y="338" width="186" height="46" rx="23" fill="#11221c" stroke="#2ee6a6" stroke-width="1.4"/>
+      <text x="479" y="368" fill="#c9f5e6" text-anchor="middle">Monitor mode</text>
+    </g>
+    <g>
+      <rect x="586" y="338" width="202" height="46" rx="23" fill="#11221c" stroke="#2ee6a6" stroke-width="1.4"/>
+      <text x="687" y="368" fill="#c9f5e6" text-anchor="middle">Packet injection</text>
+    </g>
+    <g>
+      <rect x="802" y="338" width="198" height="46" rx="23" fill="#0e1c26" stroke="#38bdf8" stroke-width="1.4"/>
+      <text x="901" y="368" fill="#bfe6fb" text-anchor="middle">Online + Offline</text>
+    </g>
+    <g>
+      <rect x="1014" y="338" width="142" height="46" rx="23" fill="#0e1c26" stroke="#38bdf8" stroke-width="1.4"/>
+      <text x="1085" y="368" fill="#bfe6fb" text-anchor="middle">GUI + CLI</text>
+    </g>
+  </g>
+
+  <!-- chipset families -->
+  <text x="250" y="452" font-family="Menlo, 'DejaVu Sans Mono', monospace" font-size="21" fill="#8b949e">
+    18 chipset families  ·  Realtek · Atheros · MediaTek  ·  in-kernel / apt / DKMS / offline
+  </text>
+
+  <!-- footer -->
+  <rect x="250" y="500" width="780" height="1.5" fill="#283042"/>
+  <text x="250" y="548" font-family="Menlo, 'DejaVu Sans Mono', monospace" font-size="20" fill="#6e7681">
+    MIT · PySide6 GUI · pure-stdlib core + CLI
+  </text>
+  <text x="1150" y="548" font-family="Menlo, 'DejaVu Sans Mono', monospace" font-size="20" fill="#7d8794" text-anchor="end">
+    github.com/at0m-b0mb/AirDriver
+  </text>
+</svg>

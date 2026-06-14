@@ -1,0 +1,347 @@
+{
+  "schema_version": 1,
+  "updated": "2026-06-13",
+  "_about": "AirDriver chipset database. Maps USB VID:PID -> chipset -> driver install strategy. 'usb_ids' are lowercase 'vid:pid'. 'kernel_native' tells AirDriver when an in-kernel driver already exists so it can SKIP a pointless DKMS build. 'drivers' are tried in 'priority' order (1 = first). Extend freely: add entries or usb_ids and AirDriver picks them up on next scan.",
+  "injection_quality_scale": ["unknown", "poor", "fair", "good", "excellent"],
+  "chipsets": [
+    {
+      "id": "rtl8812au",
+      "name": "Realtek RTL8812AU",
+      "vendor": "Realtek",
+      "wifi": "WiFi 5 (802.11ac)",
+      "band": "Dual-band AC1200 (2.4 + 5 GHz)",
+      "monitor_mode": true,
+      "injection": true,
+      "injection_quality": "good",
+      "notes": "The classic ALFA AWUS036ACH chipset. Monitor mode can get unstable after long sessions on some firmware revisions; morrownr driver is more stable than the kernel rtw88 path for injection work.",
+      "adapters": ["ALFA AWUS036ACH", "ALFA AWUS036AC", "TP-Link Archer T4U v1", "Netgear A6210"],
+      "usb_ids": ["0bda:8812", "0bda:881a", "0bda:881b", "0bda:881c", "0bda:a811", "2357:0103", "2357:0106", "2357:0108", "2357:0109", "0846:9052", "0e66:0022", "2001:3314", "2001:3315", "7392:a812", "7392:a811", "7392:a822", "20f4:805b", "0df6:0074", "13b1:003f", "0411:0242", "0411:029b", "04bb:0952", "056e:4007"],
+      "kernel_native": {"module": "rtw88_8812au", "min_kernel": "6.13", "recommended_kernel": "6.14"},
+      "drivers": [
+        {"method": "apt", "package": "realtek-rtl88xxau-dkms", "distro": ["kali", "parrot", "debian", "ubuntu"], "priority": 1},
+        {"method": "dkms_git", "repo": "https://github.com/morrownr/8812au-20210820", "module": "88XXau", "priority": 2},
+        {"method": "offline", "path": "drivers/8812au-20210820", "module": "88XXau", "priority": 3}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "rtl8821au",
+      "name": "Realtek RTL8811AU / RTL8821AU",
+      "vendor": "Realtek",
+      "wifi": "WiFi 5 (802.11ac)",
+      "band": "Dual-band AC600 (2.4 + 5 GHz)",
+      "monitor_mode": true,
+      "injection": true,
+      "injection_quality": "fair",
+      "notes": "Smaller/cheaper AC600 sibling of the 8812au. Good for travel; lower TX power. 8811AU has no active-monitor VIF on the in-kernel path.",
+      "adapters": ["ALFA AWUS036ACS", "TP-Link Archer T2U v1", "Edimax EW-7811UTC"],
+      "usb_ids": ["0bda:0811", "0bda:0820", "0bda:0821", "0bda:8822", "0bda:a811", "2357:011e", "2357:011f", "2357:0120", "7392:a822", "0e66:0023"],
+      "kernel_native": {"module": "rtw88_8821au", "min_kernel": "6.13", "recommended_kernel": "6.14"},
+      "drivers": [
+        {"method": "apt", "package": "realtek-rtl88xxau-dkms", "distro": ["kali", "parrot", "debian", "ubuntu"], "priority": 1},
+        {"method": "dkms_git", "repo": "https://github.com/morrownr/8821au-20210708", "module": "8821au", "priority": 2},
+        {"method": "offline", "path": "drivers/8821au-20210708", "module": "8821au", "priority": 3}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "rtl8814au",
+      "name": "Realtek RTL8814AU",
+      "vendor": "Realtek",
+      "wifi": "WiFi 5 (802.11ac)",
+      "band": "Dual-band AC1900 (2.4 + 5 GHz), 4x4",
+      "monitor_mode": true,
+      "injection": true,
+      "injection_quality": "good",
+      "notes": "High-power 4-antenna beast (ALFA AWUS1900). Draws a lot of current — use a powered hub on SBCs. In-kernel rtw88 support landed 6.15 / optimized 6.16.",
+      "adapters": ["ALFA AWUS1900", "ALFA AWUS036ACA"],
+      "usb_ids": ["0bda:8813"],
+      "kernel_native": {"module": "rtw88_8814au", "min_kernel": "6.15", "recommended_kernel": "6.16"},
+      "drivers": [
+        {"method": "apt", "package": "realtek-rtl8814au-dkms", "distro": ["kali", "parrot"], "priority": 1},
+        {"method": "dkms_git", "repo": "https://github.com/morrownr/8814au", "module": "8814au", "priority": 2},
+        {"method": "offline", "path": "drivers/8814au", "module": "8814au", "priority": 3}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "rtl8821cu",
+      "name": "Realtek RTL8811CU / RTL8821CU",
+      "vendor": "Realtek",
+      "wifi": "WiFi 5 (802.11ac)",
+      "band": "Dual-band AC600/AC650 (2.4 + 5 GHz)",
+      "monitor_mode": true,
+      "injection": true,
+      "injection_quality": "fair",
+      "notes": "Common in tiny nano adapters (TP-Link Archer T2U Nano/Plus). No mainline in-kernel driver yet — DKMS required.",
+      "adapters": ["TP-Link Archer T2U Nano", "TP-Link Archer T2U Plus", "TP-Link Archer T3U", "ALFA AWUS036ACU"],
+      "usb_ids": ["0bda:c811", "0bda:c820", "0bda:c821", "0bda:c82a", "0bda:c82b", "0bda:c830", "0bda:b820", "2357:0122", "2357:012d", "2357:0138", "2001:331e", "7392:c822"],
+      "kernel_native": null,
+      "drivers": [
+        {"method": "apt", "package": "realtek-rtl8821cu-dkms", "distro": ["kali", "parrot"], "priority": 1},
+        {"method": "dkms_git", "repo": "https://github.com/morrownr/8821cu-20210916", "module": "8821cu", "priority": 2},
+        {"method": "offline", "path": "drivers/8821cu-20210916", "module": "8821cu", "priority": 3}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "rtl8188eus",
+      "name": "Realtek RTL8188EUS / RTL8188EU",
+      "vendor": "Realtek",
+      "wifi": "WiFi 4 (802.11n)",
+      "band": "Single-band 2.4 GHz",
+      "monitor_mode": true,
+      "injection": true,
+      "injection_quality": "fair",
+      "notes": "This is the chip inside TP-Link TL-WN722N v2/v3 (the v1 is AR9271 — a very common mix-up!). The in-kernel r8188eu lacks reliable monitor mode; use the aircrack/morrownr DKMS driver and blacklist the in-tree module.",
+      "adapters": ["TP-Link TL-WN722N v2/v3", "ALFA AWUS036NEH"],
+      "usb_ids": ["0bda:8179", "0bda:0179", "2357:010c", "2357:0111", "2c4e:0102"],
+      "kernel_native": null,
+      "drivers": [
+        {"method": "apt", "package": "realtek-rtl8188eus-dkms", "distro": ["kali", "parrot"], "priority": 1},
+        {"method": "dkms_git", "repo": "https://github.com/aircrack-ng/rtl8188eus", "module": "8188eu", "priority": 2},
+        {"method": "offline", "path": "drivers/rtl8188eus", "module": "8188eu", "priority": 3}
+      ],
+      "blacklist": ["r8188eu"]
+    },
+    {
+      "id": "rtl8188fu",
+      "name": "Realtek RTL8188FTV / RTL8188FU",
+      "vendor": "Realtek",
+      "wifi": "WiFi 4 (802.11n)",
+      "band": "Single-band 2.4 GHz",
+      "monitor_mode": false,
+      "injection": false,
+      "injection_quality": "poor",
+      "notes": "Budget chip found in cheap dongles. Limited/unreliable monitor support — not recommended for serious work, included so AirDriver can still get the user online.",
+      "adapters": ["Generic 'mini' 2.4 GHz dongles"],
+      "usb_ids": ["0bda:f179", "0bda:f180"],
+      "kernel_native": {"module": "rtl8xxxu", "min_kernel": "5.10", "recommended_kernel": "6.0"},
+      "drivers": [
+        {"method": "dkms_git", "repo": "https://github.com/kelebek333/rtl8188fu", "module": "rtl8188fu", "priority": 1},
+        {"method": "offline", "path": "drivers/rtl8188fu", "module": "rtl8188fu", "priority": 2}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "rtl8192eu",
+      "name": "Realtek RTL8192EU",
+      "vendor": "Realtek",
+      "wifi": "WiFi 4 (802.11n)",
+      "band": "Single-band 2.4 GHz, 2x2",
+      "monitor_mode": true,
+      "injection": true,
+      "injection_quality": "fair",
+      "notes": "Decent 2.4 GHz-only option. The in-kernel rtl8xxxu works for connectivity but the DKMS driver is more reliable for injection.",
+      "adapters": ["TP-Link TL-WN822N v4/v5", "Edimax EW-7612U"],
+      "usb_ids": ["0bda:818b", "0bda:818c", "2357:0107", "2019:ab33", "7392:b611"],
+      "kernel_native": {"module": "rtl8xxxu", "min_kernel": "5.10", "recommended_kernel": "6.0"},
+      "drivers": [
+        {"method": "apt", "package": "realtek-rtl8192eu-dkms", "distro": ["kali", "parrot"], "priority": 1},
+        {"method": "dkms_git", "repo": "https://github.com/clnhub/rtl8192eu-linux", "module": "8192eu", "priority": 2},
+        {"method": "offline", "path": "drivers/rtl8192eu-linux", "module": "8192eu", "priority": 3}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "rtl8187",
+      "name": "Realtek RTL8187",
+      "vendor": "Realtek",
+      "wifi": "WiFi 4 (802.11g)",
+      "band": "Single-band 2.4 GHz",
+      "monitor_mode": true,
+      "injection": true,
+      "injection_quality": "excellent",
+      "notes": "The legendary original ALFA AWUS036H. Ancient but rock-solid injection. Fully in-kernel (rtl8187) — AirDriver just confirms the module loads, no build needed.",
+      "adapters": ["ALFA AWUS036H"],
+      "usb_ids": ["0bda:8187", "0bda:8189", "0bda:8197", "0bda:8198"],
+      "kernel_native": {"module": "rtl8187", "min_kernel": "2.6", "recommended_kernel": "any"},
+      "drivers": [
+        {"method": "kernel_native", "module": "rtl8187", "priority": 1}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "ar9271",
+      "name": "Atheros AR9271",
+      "vendor": "Qualcomm Atheros",
+      "wifi": "WiFi 4 (802.11n)",
+      "band": "Single-band 2.4 GHz",
+      "monitor_mode": true,
+      "injection": true,
+      "injection_quality": "excellent",
+      "notes": "Gold-standard 2.4 GHz pentest chip (ALFA AWUS036NHA, TL-WN722N v1). Fully in-kernel via ath9k_htc but needs the linux-firmware 'htc_9271' blob. AirDriver verifies the firmware is present.",
+      "adapters": ["ALFA AWUS036NHA", "TP-Link TL-WN722N v1", "Panda PAU05"],
+      "usb_ids": ["0cf3:9271", "0cf3:1006", "0cf3:7015", "040d:3801"],
+      "kernel_native": {"module": "ath9k_htc", "min_kernel": "2.6.39", "recommended_kernel": "any", "firmware": "htc_9271.fw"},
+      "drivers": [
+        {"method": "kernel_native", "module": "ath9k_htc", "firmware_pkg": "firmware-atheros", "priority": 1}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "ar7010",
+      "name": "Atheros AR7010",
+      "vendor": "Qualcomm Atheros",
+      "wifi": "WiFi 4 (802.11n)",
+      "band": "Dual-band 2.4 + 5 GHz",
+      "monitor_mode": true,
+      "injection": true,
+      "injection_quality": "good",
+      "notes": "Dual-band Atheros sibling of the AR9271. In-kernel ath9k_htc, needs the htc_7010 firmware blob.",
+      "adapters": ["ALFA AWUS051NH v2", "Netgear WNDA3200"],
+      "usb_ids": ["0cf3:7010", "0846:9018"],
+      "kernel_native": {"module": "ath9k_htc", "min_kernel": "2.6.39", "recommended_kernel": "any", "firmware": "htc_7010.fw"},
+      "drivers": [
+        {"method": "kernel_native", "module": "ath9k_htc", "firmware_pkg": "firmware-atheros", "priority": 1}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "rt2870_rt3070",
+      "name": "Ralink RT3070 / RT2870",
+      "vendor": "Ralink / MediaTek",
+      "wifi": "WiFi 4 (802.11n)",
+      "band": "Single-band 2.4 GHz",
+      "monitor_mode": true,
+      "injection": true,
+      "injection_quality": "good",
+      "notes": "Old reliable. Fully in-kernel via rt2800usb. Common in many cheap-but-capable dongles.",
+      "adapters": ["ALFA AWUS036NH", "Panda PAU06"],
+      "usb_ids": ["148f:3070", "148f:3071", "148f:3072", "148f:2870", "148f:2770", "0bda:8070", "07b8:3070", "1737:0077", "083a:7512"],
+      "kernel_native": {"module": "rt2800usb", "min_kernel": "2.6", "recommended_kernel": "any"},
+      "drivers": [
+        {"method": "kernel_native", "module": "rt2800usb", "priority": 1}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "rt5370",
+      "name": "Ralink RT5370 / RT5372",
+      "vendor": "Ralink / MediaTek",
+      "wifi": "WiFi 4 (802.11n)",
+      "band": "Single-band 2.4 GHz",
+      "monitor_mode": true,
+      "injection": true,
+      "injection_quality": "good",
+      "notes": "Tiny low-power 2.4 GHz chip, popular for Raspberry Pi rigs. In-kernel rt2800usb.",
+      "adapters": ["Panda PAU06", "Generic RT5370 nano"],
+      "usb_ids": ["148f:5370", "148f:5372", "148f:5572"],
+      "kernel_native": {"module": "rt2800usb", "min_kernel": "2.6", "recommended_kernel": "any"},
+      "drivers": [
+        {"method": "kernel_native", "module": "rt2800usb", "priority": 1}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "mt7610u",
+      "name": "MediaTek MT7610U",
+      "vendor": "MediaTek",
+      "wifi": "WiFi 5 (802.11ac)",
+      "band": "Dual-band AC600 (2.4 + 5 GHz)",
+      "monitor_mode": true,
+      "injection": true,
+      "injection_quality": "good",
+      "notes": "Solid in-kernel mt76x0u driver since 4.19. ALFA AWUS036ACHM. No DKMS needed on modern kernels.",
+      "adapters": ["ALFA AWUS036ACHM", "Panda PAU0B"],
+      "usb_ids": ["0e8d:7610", "0e8d:7630", "0e8d:7650"],
+      "kernel_native": {"module": "mt76x0u", "min_kernel": "4.19", "recommended_kernel": "5.4"},
+      "drivers": [
+        {"method": "kernel_native", "module": "mt76x0u", "priority": 1}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "mt7612u",
+      "name": "MediaTek MT7612U",
+      "vendor": "MediaTek",
+      "wifi": "WiFi 5 (802.11ac)",
+      "band": "Dual-band AC1200 (2.4 + 5 GHz)",
+      "monitor_mode": true,
+      "injection": true,
+      "injection_quality": "excellent",
+      "notes": "Top pick for modern pentest work: excellent in-kernel mt76x2u driver, very stable monitor mode, high injection success. No DKMS needed.",
+      "adapters": ["ALFA AWUS036ACM", "Panda PAU0D", "Netgear A6150"],
+      "usb_ids": ["0e8d:7612", "0e8d:7662", "0e8d:7632", "0b05:17d1", "7392:b711", "2357:0123", "0846:9053", "057c:8503"],
+      "kernel_native": {"module": "mt76x2u", "min_kernel": "4.19", "recommended_kernel": "5.4"},
+      "drivers": [
+        {"method": "kernel_native", "module": "mt76x2u", "priority": 1}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "mt7921au",
+      "name": "MediaTek MT7921AU",
+      "vendor": "MediaTek",
+      "wifi": "WiFi 6E (802.11ax)",
+      "band": "Tri-band AX (2.4 + 5 + 6 GHz)",
+      "monitor_mode": true,
+      "injection": true,
+      "injection_quality": "good",
+      "notes": "Modern WiFi 6E chip with active-monitor support. In-kernel mt7921u since 5.18. ALFA AWUS036AXML, Brostrend AX9L.",
+      "adapters": ["ALFA AWUS036AXML", "Brostrend AX9L", "Netgear A8000", "Panda PAU0F"],
+      "usb_ids": ["0e8d:7961", "0846:9060", "35bc:0107", "3625:010b"],
+      "kernel_native": {"module": "mt7921u", "min_kernel": "5.18", "recommended_kernel": "6.1"},
+      "drivers": [
+        {"method": "kernel_native", "module": "mt7921u", "priority": 1}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "mt7925u",
+      "name": "MediaTek MT7925U",
+      "vendor": "MediaTek",
+      "wifi": "WiFi 7 (802.11be)",
+      "band": "Tri-band BE (2.4 + 5 + 6 GHz)",
+      "monitor_mode": true,
+      "injection": true,
+      "injection_quality": "good",
+      "notes": "Bleeding-edge WiFi 7. In-kernel mt7925u since 6.7 — needs a recent kernel. Active monitor supported.",
+      "adapters": ["Netgear A9000", "Netgear A8500"],
+      "usb_ids": ["0846:9072", "0846:9050"],
+      "kernel_native": {"module": "mt7925u", "min_kernel": "6.7", "recommended_kernel": "6.10"},
+      "drivers": [
+        {"method": "kernel_native", "module": "mt7925u", "priority": 1}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "rtl8852bu",
+      "name": "Realtek RTL8852BU / RTL8832BU",
+      "vendor": "Realtek",
+      "wifi": "WiFi 6 (802.11ax)",
+      "band": "Dual-band AX1800 (2.4 + 5 GHz)",
+      "monitor_mode": true,
+      "injection": true,
+      "injection_quality": "fair",
+      "notes": "Newer Realtek WiFi 6 USB chip. No mainline driver yet — morrownr DKMS required. Monitor/injection maturing.",
+      "adapters": ["ALFA AWUS036AXM", "Generic AX1800 USB"],
+      "usb_ids": ["0bda:b832", "0bda:b83b", "0bda:a85b"],
+      "kernel_native": null,
+      "drivers": [
+        {"method": "dkms_git", "repo": "https://github.com/morrownr/rtl8852bu-20250826", "module": "8852bu", "priority": 1},
+        {"method": "offline", "path": "drivers/rtl8852bu-20250826", "module": "8852bu", "priority": 2}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "rtl8852cu",
+      "name": "Realtek RTL8852CU / RTL8832CU",
+      "vendor": "Realtek",
+      "wifi": "WiFi 6E (802.11ax)",
+      "band": "Tri-band AXE (2.4 + 5 + 6 GHz)",
+      "monitor_mode": true,
+      "injection": true,
+      "injection_quality": "fair",
+      "notes": "Realtek WiFi 6E USB. No mainline driver — morrownr DKMS required.",
+      "adapters": ["Generic AXE USB"],
+      "usb_ids": ["0bda:c832", "0bda:c85c"],
+      "kernel_native": null,
+      "drivers": [
+        {"method": "dkms_git", "repo": "https://github.com/morrownr/rtl8852cu-20251113", "module": "8852cu", "priority": 1},
+        {"method": "offline", "path": "drivers/rtl8852cu-20251113", "module": "8852cu", "priority": 2}
+      ],
+      "blacklist": []
+    }
+  ]
+}

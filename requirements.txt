@@ -1,0 +1,4 @@
+# AirDriver runtime dependencies.
+# The core engine + CLI use only the Python standard library — they run with
+# zero pip installs on a stock Kali/Parrot box. Only the GUI needs PySide6.
+PySide6>=6.5

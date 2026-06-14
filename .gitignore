@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# AirDriver runtime
+~/.airdriver/
+*.report.json
+
+# Offline driver bundle is populated by scripts/fetch_offline_drivers.sh.
+# We keep the folder + README, but not the (large) cloned driver sources.
+airdriver/data/drivers/*/
+!airdriver/data/drivers/.gitkeep
+!airdriver/data/drivers/README.md
+
+# OS noise
+.DS_Store
