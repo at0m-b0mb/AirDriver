@@ -45,10 +45,17 @@ def stylesheet() -> str:
     QFrame#Card[selected="true"] {{
         background: {PANEL_HI}; border: 1px solid {ACCENT};
     }}
-    QFrame#Header {{ background: {PANEL}; border-bottom: 1px solid {BORDER}; }}
+    QFrame#Header {{
+        background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+            stop:0 {PANEL_HI}, stop:1 {PANEL});
+        border-bottom: 1px solid {BORDER};
+    }}
     QFrame#StatusStrip {{
         background: {PANEL}; border: 1px solid {BORDER}; border-radius: 10px;
     }}
+    QFrame#Footer {{ background: {BG}; border-top: 1px solid {BORDER}; }}
+    QLabel#Link {{ color: {CYAN}; }}
+    QLabel#Tag {{ color: {ACCENT}; font-weight: 600; }}
 
     QPushButton {{
         background: {PANEL_HI}; color: {TEXT};

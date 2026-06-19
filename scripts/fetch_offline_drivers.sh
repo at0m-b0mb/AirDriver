@@ -17,9 +17,13 @@ REPOS=(
   "rtl8821au|https://github.com/morrownr/8821au-20210708|8821au-20210708"
   "rtl8814au|https://github.com/morrownr/8814au|8814au"
   "rtl8821cu|https://github.com/morrownr/8821cu-20210916|8821cu-20210916"
+  "rtl8822bu|https://github.com/morrownr/88x2bu-20210702|88x2bu-20210702"
   "rtl8188eus|https://github.com/aircrack-ng/rtl8188eus|rtl8188eus"
   "rtl8188fu|https://github.com/kelebek333/rtl8188fu|rtl8188fu"
   "rtl8192eu|https://github.com/clnhub/rtl8192eu-linux|rtl8192eu-linux"
+  "rtl8192cu|https://github.com/pvaret/rtl8192cu-fixes|rtl8192cu-fixes"
+  "rtl8723bu|https://github.com/lwfinger/rtl8723bu|rtl8723bu"
+  "rtl8821ce|https://github.com/tomaspinho/rtl8821ce|rtl8821ce"
   "rtl8852bu|https://github.com/morrownr/rtl8852bu-20250826|rtl8852bu-20250826"
   "rtl8852cu|https://github.com/morrownr/rtl8852cu-20251113|rtl8852cu-20251113"
 )

@@ -13,12 +13,12 @@ Long operations (scan, install) run on worker threads so the UI never freezes.
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, QThread, QObject, Signal, QSize
-from PySide6.QtGui import QFont
+from PySide6.QtCore import Qt, QThread, QObject, Signal, QSize, QUrl, QRectF
+from PySide6.QtGui import QFont, QDesktopServices, QPixmap, QPainter, QPen, QColor, QIcon
 from PySide6.QtWidgets import (
-    QApplication, QCheckBox, QComboBox, QFrame, QHBoxLayout, QLabel,
+    QApplication, QCheckBox, QComboBox, QDialog, QFrame, QHBoxLayout, QLabel,
     QMainWindow, QMessageBox, QPlainTextEdit, QPushButton, QScrollArea,
-    QSizePolicy, QVBoxLayout, QWidget,
+    QSizePolicy, QTextBrowser, QVBoxLayout, QWidget,
 )
 
 from .. import __version__, __codename__
@@ -27,6 +27,33 @@ from ..core.chipset_db import Chipset, ChipsetDB
 from ..core.detector import Adapter
 from ..core.installer import Executor, build_plan
 from . import theme as T
+
+REPO_URL = "https://github.com/at0m-b0mb/AirDriver"
+
+
+def make_logo(size: int = 30) -> QPixmap:
+    """A crisp vector 'transmitting signal' mark — no emoji-font dependency."""
+    dpr = 2
+    pm = QPixmap(size * dpr, size * dpr)
+    pm.setDevicePixelRatio(dpr)
+    pm.fill(Qt.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.Antialiasing, True)
+    cx, cy = size / 2, size * 0.66
+    # expanding arcs
+    for i, r in enumerate((size * 0.18, size * 0.32, size * 0.46)):
+        col = QColor(T.ACCENT)
+        col.setAlpha(255 - i * 70)
+        p.setPen(QPen(col, size * 0.075))
+        rect = QRectF(cx - r, cy - r, r * 2, r * 2)
+        p.drawArc(rect, 55 * 16, 70 * 16)
+    # emitter dot
+    p.setPen(Qt.NoPen)
+    p.setBrush(QColor(T.ACCENT))
+    d = size * 0.13
+    p.drawEllipse(QRectF(cx - d / 2, cy - d / 2, d, d))
+    p.end()
+    return pm
 
 
 # --------------------------------------------------------------------------- #
@@ -142,6 +169,7 @@ class MainWindow(QMainWindow):
         self._thread: QThread | None = None
 
         self.setWindowTitle(f"AirDriver {__version__}")
+        self.setWindowIcon(QIcon(make_logo(64)))
         self.resize(1080, 720)
         self.setMinimumSize(QSize(900, 600))
 
@@ -164,8 +192,27 @@ class MainWindow(QMainWindow):
         body_l.addWidget(self.status_strip)
         body_l.addWidget(self._build_body(), 1)
         outer.addWidget(body, 1)
+        outer.addWidget(self._build_footer())
 
         self.rescan()
+
+    # ---- footer ------------------------------------------------------------
+    def _build_footer(self) -> QWidget:
+        f = QFrame()
+        f.setObjectName("Footer")
+        lay = QHBoxLayout(f)
+        lay.setContentsMargins(18, 8, 18, 8)
+        tip = QLabel("Tip: pick an adapter, review the plan, then Install. "
+                     "Use Dry run to preview safely.")
+        tip.setObjectName("Dim")
+        link = QLabel(f'<a style="color:{T.CYAN};text-decoration:none" '
+                      f'href="{REPO_URL}">github.com/at0m-b0mb/AirDriver</a>')
+        link.setOpenExternalLinks(True)
+        link.setTextFormat(Qt.RichText)
+        lay.addWidget(tip)
+        lay.addStretch(1)
+        lay.addWidget(link)
+        return f
 
     # ---- header ------------------------------------------------------------
     def _build_header(self) -> QWidget:
@@ -173,8 +220,8 @@ class MainWindow(QMainWindow):
         h.setObjectName("Header")
         lay = QHBoxLayout(h)
         lay.setContentsMargins(18, 14, 18, 14)
-        logo = QLabel("📡")
-        logo.setStyleSheet("font-size:26px;")
+        logo = QLabel()
+        logo.setPixmap(make_logo(30))
         title = QLabel("AirDriver")
         title.setObjectName("H1")
         ver = QLabel(f"v{__version__} · {__codename__}")
@@ -188,7 +235,12 @@ class MainWindow(QMainWindow):
         lay.addSpacing(6)
         lay.addLayout(col)
         lay.addStretch(1)
+        self.btn_help = QPushButton("?  Help")
+        self.btn_help.setToolTip("Quick start, troubleshooting, and the project page")
+        self.btn_help.clicked.connect(self.show_help)
+        lay.addWidget(self.btn_help)
         self.btn_rescan = QPushButton("⟳  Rescan")
+        self.btn_rescan.setToolTip("Re-scan the USB/PCI bus for adapters")
         self.btn_rescan.clicked.connect(self.rescan)
         lay.addWidget(self.btn_rescan)
         return h
@@ -277,11 +329,16 @@ class MainWindow(QMainWindow):
         self.btn_plan = QPushButton("Preview plan")
         self.btn_plan.setEnabled(False)
         self.btn_plan.clicked.connect(self.preview_plan)
+        self.btn_copylog = QPushButton("Copy log")
+        self.btn_copylog.setToolTip("Copy the activity log to the clipboard (handy for forum help threads)")
+        self.btn_copylog.clicked.connect(self.copy_log)
         self.btn_report = QPushButton("Export report")
+        self.btn_report.setToolTip("Write a JSON + Markdown diagnostic report")
         self.btn_report.clicked.connect(self.export_report)
         actions.addWidget(self.btn_install)
         actions.addWidget(self.btn_plan)
         actions.addStretch(1)
+        actions.addWidget(self.btn_copylog)
         actions.addWidget(self.btn_report)
         lay.addLayout(actions)
 
@@ -488,3 +545,72 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, "Report saved",
                                 "Diagnostic report written to:\n\n" +
                                 "\n".join(str(p) for p in paths))
+
+    # ---- copy log ----------------------------------------------------------
+    def copy_log(self):
+        text = self.log.toPlainText()
+        if not text.strip():
+            self.log_line("(nothing to copy yet)")
+            return
+        QApplication.clipboard().setText(text)
+        self.log_line("📋 Log copied to clipboard.")
+
+    # ---- help / about ------------------------------------------------------
+    def show_help(self):
+        dlg = QDialog(self)
+        dlg.setWindowTitle("AirDriver — Help")
+        dlg.resize(640, 560)
+        lay = QVBoxLayout(dlg)
+        view = QTextBrowser()
+        view.setOpenExternalLinks(True)
+        view.setHtml(f"""
+        <h2 style="color:{T.ACCENT};margin-bottom:2px">AirDriver
+            <span style="color:{T.DIM};font-size:13px">v{__version__} · {__codename__}</span></h2>
+        <p style="color:{T.DIM}">WiFi adapter driver auto-installer for Kali&nbsp;Linux &amp; Parrot&nbsp;OS.</p>
+
+        <h3 style="color:{T.CYAN}">Quick start</h3>
+        <ol>
+          <li>Plug in your USB WiFi adapter.</li>
+          <li>Press <b>⟳ Rescan</b> and select the adapter card on the left.</li>
+          <li>Review the chipset details &amp; capabilities, then click <b>⬇ Install driver</b>.</li>
+          <li>Tick <b>Dry run</b> first if you want to preview every step without changing anything.</li>
+        </ol>
+
+        <h3 style="color:{T.CYAN}">Installing needs root</h3>
+        <p>Driver installation modifies the system, so it needs root. The smoothest way is to
+        launch the whole app with root:</p>
+        <pre style="background:#0a0e14;padding:8px;border-radius:6px">sudo airdriver</pre>
+        <p>If you started it as a normal user, that's fine too — each install step will ask for
+        your <code>sudo</code> password in the terminal you launched from.</p>
+
+        <h3 style="color:{T.CYAN}">Won't open / Qt errors?</h3>
+        <p>The command-line tools need <b>no</b> GUI libraries and always work:</p>
+        <pre style="background:#0a0e14;padding:8px;border-radius:6px">airdriver scan      airdriver doctor      airdriver install</pre>
+        <p>If the GUI shows an <code>xcb</code> error, install the Qt runtime libs:</p>
+        <pre style="background:#0a0e14;padding:8px;border-radius:6px">sudo apt install libxcb-cursor0 libxkbcommon-x11-0 libegl1</pre>
+
+        <h3 style="color:{T.CYAN}">Adapter not recognised?</h3>
+        <p>Select it, choose the closest chipset under <b>Identify as</b>, and AirDriver will try
+        that driver. Please consider reporting its USB ID so it can be added to the database.</p>
+
+        <h3 style="color:{T.CYAN}">Links</h3>
+        <p>
+          Project &amp; issues: <a style="color:{T.CYAN}" href="{REPO_URL}">{REPO_URL}</a><br>
+          Chipset database: <a style="color:{T.CYAN}" href="{REPO_URL}/blob/main/airdriver/data/chipsets.json">chipsets.json</a>
+        </p>
+
+        <p style="color:{T.WARN}">⚠ Use monitor mode / injection only on networks you own or are
+        authorised to test.</p>
+        """)
+        lay.addWidget(view)
+        row = QHBoxLayout()
+        btn_repo = QPushButton("Open project page")
+        btn_repo.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(REPO_URL)))
+        btn_close = QPushButton("Close")
+        btn_close.setObjectName("Primary")
+        btn_close.clicked.connect(dlg.accept)
+        row.addWidget(btn_repo)
+        row.addStretch(1)
+        row.addWidget(btn_close)
+        lay.addLayout(row)
+        dlg.exec()

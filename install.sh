@@ -1,63 +1,130 @@
 #!/usr/bin/env bash
-# AirDriver bootstrap installer for Kali Linux / Parrot OS (and Debian/Ubuntu).
-# Sets up a virtualenv, installs the GUI deps, and drops a launcher on PATH.
+# ─────────────────────────────────────────────────────────────────────────────
+#  AirDriver installer  ·  Kali / Parrot / Debian / Ubuntu
 #
-#   chmod +x install.sh && sudo ./install.sh
+#  Sets up everything you need and drops an `airdriver` command on your PATH:
+#    • system prerequisites (dkms, headers, usbutils, aircrack-ng, Qt libs…)
+#    • an isolated Python virtualenv with the GUI (PySide6)
+#    • a smart launcher that even makes `sudo airdriver` open the GUI correctly
 #
+#  Usage:   sudo ./install.sh
+#  Re-runnable: safe to run again to repair or update an install.
+# ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-GREEN='\033[32m'; YELLOW='\033[33m'; CYAN='\033[36m'; RESET='\033[0m'
-say() { echo -e "${CYAN}[airdriver]${RESET} $*"; }
-ok()  { echo -e "${GREEN}[ ok ]${RESET} $*"; }
-warn(){ echo -e "${YELLOW}[warn]${RESET} $*"; }
-
-if [ "$(id -u)" -ne 0 ]; then
-  warn "Not running as root. System packages won't be installed automatically."
-  warn "Re-run with sudo for the full setup, or continue for a user-only install."
-fi
-
-# --- 1. system packages (best effort; needs root) --------------------------
-if command -v apt-get >/dev/null 2>&1 && [ "$(id -u)" -eq 0 ]; then
-  say "Installing system prerequisites…"
-  apt-get update -qq || warn "apt update failed (offline?) — continuing."
-  apt-get install -y --no-install-recommends \
-      python3 python3-venv python3-pip \
-      dkms build-essential bc libelf-dev git \
-      "linux-headers-$(uname -r)" \
-      pkg-config usbutils pciutils iw aircrack-ng \
-    || warn "Some packages failed to install — install them manually if a build fails."
-  ok "System prerequisites done."
-else
-  warn "Skipping apt step (no apt or not root)."
-fi
-
-# --- 2. python venv + GUI deps --------------------------------------------
-say "Creating virtualenv at $HERE/.venv…"
-python3 -m venv "$HERE/.venv"
-# shellcheck disable=SC1091
-source "$HERE/.venv/bin/activate"
-pip install --upgrade pip >/dev/null
-say "Installing AirDriver (with GUI extras)…"
-pip install -e "$HERE[gui]" || pip install PySide6 && pip install -e "$HERE"
-ok "Python deps installed."
-
-# --- 3. launcher -----------------------------------------------------------
+VENV="$HERE/.venv"
 LAUNCHER="/usr/local/bin/airdriver"
-if [ -w "$(dirname "$LAUNCHER")" ] || [ "$(id -u)" -eq 0 ]; then
-  cat > "$LAUNCHER" <<EOF
-#!/usr/bin/env bash
-exec "$HERE/.venv/bin/python" -m airdriver "\$@"
-EOF
-  chmod +x "$LAUNCHER"
-  ok "Installed launcher: $LAUNCHER"
+
+# --- pretty output ----------------------------------------------------------
+if [ -t 1 ]; then
+  BOLD='\033[1m'; GREEN='\033[32m'; YELLOW='\033[33m'; CYAN='\033[36m'; RED='\033[31m'; RESET='\033[0m'
 else
-  warn "Could not write $LAUNCHER. Launch manually with:"
-  warn "  $HERE/.venv/bin/python -m airdriver"
+  BOLD=''; GREEN=''; YELLOW=''; CYAN=''; RED=''; RESET=''
 fi
+say()  { echo -e "${CYAN}${BOLD}▸${RESET} $*"; }
+ok()   { echo -e "  ${GREEN}✓${RESET} $*"; }
+warn() { echo -e "  ${YELLOW}!${RESET} $*"; }
+err()  { echo -e "  ${RED}✗${RESET} $*"; }
 
 echo
-ok "AirDriver installed."
-echo -e "  Launch the GUI:   ${GREEN}sudo airdriver${RESET}"
-echo -e "  Or the CLI:       ${GREEN}sudo airdriver scan${RESET}"
-echo -e "  Bundle drivers:   ${GREEN}./scripts/fetch_offline_drivers.sh${RESET}  (run while online)"
+echo -e "${BOLD}${CYAN}  AirDriver installer${RESET}  —  WiFi adapter driver auto-installer"
+echo -e "  ${YELLOW}https://github.com/at0m-b0mb/AirDriver${RESET}"
+echo
+
+IS_ROOT=0; [ "$(id -u)" -eq 0 ] && IS_ROOT=1
+# The real user, so a venv made under sudo isn't left root-owned.
+REAL_USER="${SUDO_USER:-$(id -un)}"
+
+# --- 1. system prerequisites (needs root; best-effort) ----------------------
+if command -v apt-get >/dev/null 2>&1; then
+  if [ "$IS_ROOT" -eq 1 ]; then
+    say "Installing system prerequisites (this can take a minute)…"
+    apt-get update -qq || warn "apt update failed (offline?) — continuing."
+
+    # Build toolchain + pentest tooling + USB/PCI enumeration.
+    BUILD_PKGS=(python3 python3-venv python3-pip
+                dkms build-essential bc libelf-dev git pkg-config
+                usbutils pciutils iw wireless-tools rfkill aircrack-ng
+                "linux-headers-$(uname -r)")
+    # Qt6 / xcb runtime libs PySide6 needs to actually open a window.
+    QT_PKGS=(libgl1 libegl1 libdbus-1-3 libxkbcommon-x11-0
+             libxcb-cursor0 libxcb-xinerama0 libxcb-icccm4 libxcb-image0
+             libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0
+             libxcb-shm0 libxcb-util1 fontconfig)
+
+    apt-get install -y --no-install-recommends "${BUILD_PKGS[@]}" \
+      || warn "Some build packages failed — driver builds may need them later."
+    apt-get install -y --no-install-recommends "${QT_PKGS[@]}" \
+      || warn "Some Qt libs failed to install — the GUI may not open (CLI still works)."
+    ok "System prerequisites done."
+  else
+    warn "Not root: skipping system packages."
+    warn "For the full setup (and the GUI) re-run with:  ${BOLD}sudo ./install.sh${RESET}"
+  fi
+else
+  warn "No apt found — assuming this is a dev box. Installing Python deps only."
+fi
+
+# --- 2. Python virtualenv + AirDriver (with GUI extras) ---------------------
+# Build the venv as the real user when we were invoked via sudo, so the user
+# can run/update it later without sudo.
+run_as_user() {
+  if [ "$IS_ROOT" -eq 1 ] && [ "$REAL_USER" != "root" ]; then
+    sudo -u "$REAL_USER" "$@"
+  else
+    "$@"
+  fi
+}
+
+say "Creating Python virtualenv at .venv …"
+if [ ! -x "$VENV/bin/python" ]; then
+  run_as_user python3 -m venv "$VENV"
+fi
+run_as_user "$VENV/bin/python" -m pip install --quiet --upgrade pip wheel || true
+
+say "Installing AirDriver + GUI (PySide6)…"
+if run_as_user "$VENV/bin/python" -m pip install --quiet -e "$HERE[gui]"; then
+  ok "Installed AirDriver with the GUI."
+else
+  warn "GUI extra failed — installing core only (CLI will still work)."
+  run_as_user "$VENV/bin/python" -m pip install --quiet -e "$HERE" \
+    && ok "Installed AirDriver (CLI only)."
+fi
+
+# --- 3. smart launcher on PATH ----------------------------------------------
+say "Installing the 'airdriver' launcher…"
+write_launcher() {
+  cat > "$1" <<EOF
+#!/usr/bin/env bash
+# AirDriver launcher (generated by install.sh). The display-env repair for
+# 'sudo airdriver' lives in Python (airdriver.gui.app), so this just execs.
+exec "$VENV/bin/python" -m airdriver "\$@"
+EOF
+  chmod +x "$1"
+}
+
+if [ "$IS_ROOT" -eq 1 ] || [ -w "$(dirname "$LAUNCHER")" ]; then
+  write_launcher "$LAUNCHER"
+  ok "Launcher installed: ${BOLD}$LAUNCHER${RESET}"
+else
+  mkdir -p "$HOME/.local/bin"
+  write_launcher "$HOME/.local/bin/airdriver"
+  ok "Launcher installed: ${BOLD}$HOME/.local/bin/airdriver${RESET}"
+  case ":$PATH:" in
+    *":$HOME/.local/bin:"*) : ;;
+    *) warn "Add ~/.local/bin to PATH:  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.bashrc" ;;
+  esac
+fi
+
+# --- 4. done ----------------------------------------------------------------
+echo
+echo -e "${GREEN}${BOLD}  AirDriver is installed.${RESET}"
+echo
+echo -e "  ${BOLD}Launch the GUI${RESET}      ${GREEN}sudo airdriver${RESET}        ${YELLOW}# recommended — installs run as root${RESET}"
+echo -e "  ${BOLD}Scan adapters${RESET}       ${GREEN}airdriver scan${RESET}"
+echo -e "  ${BOLD}Check readiness${RESET}     ${GREEN}airdriver doctor${RESET}"
+echo -e "  ${BOLD}Bundle offline${RESET}      ${GREEN}./scripts/fetch_offline_drivers.sh${RESET}   ${YELLOW}# run while online${RESET}"
+echo
+echo -e "  No display / over SSH? Everything works headless via the CLI."
+echo

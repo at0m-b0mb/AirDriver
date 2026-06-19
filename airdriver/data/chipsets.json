@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "updated": "2026-06-13",
-  "_about": "AirDriver chipset database. Maps USB VID:PID -> chipset -> driver install strategy. 'usb_ids' are lowercase 'vid:pid'. 'kernel_native' tells AirDriver when an in-kernel driver already exists so it can SKIP a pointless DKMS build. 'drivers' are tried in 'priority' order (1 = first). Extend freely: add entries or usb_ids and AirDriver picks them up on next scan.",
+  "updated": "2026-06-19",
+  "_about": "AirDriver chipset database. Maps USB/PCI VID:PID -> chipset -> driver install strategy. 'usb_ids' are lowercase 'vid:pid' (works for PCI ids too). 'kernel_native' tells AirDriver when an in-kernel driver already exists so it can SKIP a pointless DKMS build. 'drivers' are tried in 'priority' order (1 = first). 'monitor_mode'/'injection' are honest capability flags for pentest use; some chips connect fine but can't inject. Extend freely: add entries or usb_ids and AirDriver picks them up on next scan. PRs welcome at https://github.com/at0m-b0mb/AirDriver.",
   "injection_quality_scale": ["unknown", "poor", "fair", "good", "excellent"],
   "chipsets": [
     {
@@ -16,7 +16,7 @@
       "notes": "The classic ALFA AWUS036ACH chipset. Monitor mode can get unstable after long sessions on some firmware revisions; morrownr driver is more stable than the kernel rtw88 path for injection work.",
       "adapters": ["ALFA AWUS036ACH", "ALFA AWUS036AC", "TP-Link Archer T4U v1", "Netgear A6210"],
       "usb_ids": ["0bda:8812", "0bda:881a", "0bda:881b", "0bda:881c", "0bda:a811", "2357:0103", "2357:0106", "2357:0108", "2357:0109", "0846:9052", "0e66:0022", "2001:3314", "2001:3315", "7392:a812", "7392:a811", "7392:a822", "20f4:805b", "0df6:0074", "13b1:003f", "0411:0242", "0411:029b", "04bb:0952", "056e:4007"],
-      "kernel_native": {"module": "rtw88_8812au", "min_kernel": "6.13", "recommended_kernel": "6.14"},
+      "kernel_native": {"module": "rtw88_8812au", "min_kernel": "6.14", "recommended_kernel": "6.16"},
       "drivers": [
         {"method": "apt", "package": "realtek-rtl88xxau-dkms", "distro": ["kali", "parrot", "debian", "ubuntu"], "priority": 1},
         {"method": "dkms_git", "repo": "https://github.com/morrownr/8812au-20210820", "module": "88XXau", "priority": 2},
@@ -36,7 +36,7 @@
       "notes": "Smaller/cheaper AC600 sibling of the 8812au. Good for travel; lower TX power. 8811AU has no active-monitor VIF on the in-kernel path.",
       "adapters": ["ALFA AWUS036ACS", "TP-Link Archer T2U v1", "Edimax EW-7811UTC"],
       "usb_ids": ["0bda:0811", "0bda:0820", "0bda:0821", "0bda:8822", "0bda:a811", "2357:011e", "2357:011f", "2357:0120", "7392:a822", "0e66:0023"],
-      "kernel_native": {"module": "rtw88_8821au", "min_kernel": "6.13", "recommended_kernel": "6.14"},
+      "kernel_native": {"module": "rtw88_8821au", "min_kernel": "6.14", "recommended_kernel": "6.16"},
       "drivers": [
         {"method": "apt", "package": "realtek-rtl88xxau-dkms", "distro": ["kali", "parrot", "debian", "ubuntu"], "priority": 1},
         {"method": "dkms_git", "repo": "https://github.com/morrownr/8821au-20210708", "module": "8821au", "priority": 2},
@@ -56,7 +56,7 @@
       "notes": "High-power 4-antenna beast (ALFA AWUS1900). Draws a lot of current — use a powered hub on SBCs. In-kernel rtw88 support landed 6.15 / optimized 6.16.",
       "adapters": ["ALFA AWUS1900", "ALFA AWUS036ACA"],
       "usb_ids": ["0bda:8813"],
-      "kernel_native": {"module": "rtw88_8814au", "min_kernel": "6.15", "recommended_kernel": "6.16"},
+      "kernel_native": {"module": "rtw88_8814au", "min_kernel": "6.16", "recommended_kernel": "6.17"},
       "drivers": [
         {"method": "apt", "package": "realtek-rtl8814au-dkms", "distro": ["kali", "parrot"], "priority": 1},
         {"method": "dkms_git", "repo": "https://github.com/morrownr/8814au", "module": "8814au", "priority": 2},
@@ -224,9 +224,9 @@
       "monitor_mode": true,
       "injection": true,
       "injection_quality": "good",
-      "notes": "Tiny low-power 2.4 GHz chip, popular for Raspberry Pi rigs. In-kernel rt2800usb.",
+      "notes": "Tiny low-power 2.4 GHz chip, popular for Raspberry Pi rigs. In-kernel rt2800usb. (The dual-band RT5572 lives in its own entry.)",
       "adapters": ["Panda PAU06", "Generic RT5370 nano"],
-      "usb_ids": ["148f:5370", "148f:5372", "148f:5572"],
+      "usb_ids": ["148f:5370", "148f:5372"],
       "kernel_native": {"module": "rt2800usb", "min_kernel": "2.6", "recommended_kernel": "any"},
       "drivers": [
         {"method": "kernel_native", "module": "rt2800usb", "priority": 1}
@@ -314,13 +314,14 @@
       "monitor_mode": true,
       "injection": true,
       "injection_quality": "fair",
-      "notes": "Newer Realtek WiFi 6 USB chip. No mainline driver yet — morrownr DKMS required. Monitor/injection maturing.",
+      "notes": "Newer Realtek WiFi 6 USB chip. Mainline rtw89 support landed in kernel 6.17 (rtw89_8852bu); on older kernels use the morrownr DKMS driver. Monitor/injection maturing.",
       "adapters": ["ALFA AWUS036AXM", "Generic AX1800 USB"],
       "usb_ids": ["0bda:b832", "0bda:b83b", "0bda:a85b"],
-      "kernel_native": null,
+      "kernel_native": {"module": "rtw89_8852bu", "min_kernel": "6.17", "recommended_kernel": "6.18"},
       "drivers": [
         {"method": "dkms_git", "repo": "https://github.com/morrownr/rtl8852bu-20250826", "module": "8852bu", "priority": 1},
-        {"method": "offline", "path": "drivers/rtl8852bu-20250826", "module": "8852bu", "priority": 2}
+        {"method": "dkms_git", "repo": "https://github.com/morrownr/rtw89", "module": "rtw89_8852bu", "priority": 2},
+        {"method": "offline", "path": "drivers/rtl8852bu-20250826", "module": "8852bu", "priority": 3}
       ],
       "blacklist": []
     },
@@ -333,13 +334,199 @@
       "monitor_mode": true,
       "injection": true,
       "injection_quality": "fair",
-      "notes": "Realtek WiFi 6E USB. No mainline driver — morrownr DKMS required.",
+      "notes": "Realtek WiFi 6E USB. Mainline rtw89 support landed in kernel 6.19 (rtw89_8852cu); on older kernels use the morrownr DKMS driver.",
       "adapters": ["Generic AXE USB"],
       "usb_ids": ["0bda:c832", "0bda:c85c"],
-      "kernel_native": null,
+      "kernel_native": {"module": "rtw89_8852cu", "min_kernel": "6.19", "recommended_kernel": "6.19"},
       "drivers": [
         {"method": "dkms_git", "repo": "https://github.com/morrownr/rtl8852cu-20251113", "module": "8852cu", "priority": 1},
-        {"method": "offline", "path": "drivers/rtl8852cu-20251113", "module": "8852cu", "priority": 2}
+        {"method": "dkms_git", "repo": "https://github.com/morrownr/rtw89", "module": "rtw89_8852cu", "priority": 2},
+        {"method": "offline", "path": "drivers/rtl8852cu-20251113", "module": "8852cu", "priority": 3}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "rtl8822bu",
+      "name": "Realtek RTL8822BU / RTL8812BU",
+      "vendor": "Realtek",
+      "wifi": "WiFi 5 (802.11ac)",
+      "band": "Dual-band AC1200 (2.4 + 5 GHz)",
+      "monitor_mode": true,
+      "injection": true,
+      "injection_quality": "fair",
+      "notes": "Common in mid-range AC1200 dongles (TP-Link Archer T3U/T4U v3). The morrownr 88x2bu driver gives the most reliable monitor/injection; the Kali apt package is the easiest path.",
+      "adapters": ["TP-Link Archer T3U", "TP-Link Archer T4U v3", "Comfast CF-812AC", "ASUS USB-AC53 Nano"],
+      "usb_ids": ["0bda:b812", "0bda:b82c", "2357:0125", "2357:012e", "0b05:1841", "0b05:184c", "7392:c811", "13b1:0043"],
+      "kernel_native": null,
+      "drivers": [
+        {"method": "apt", "package": "realtek-rtl88x2bu-dkms", "distro": ["kali", "parrot", "debian", "ubuntu"], "priority": 1},
+        {"method": "dkms_git", "repo": "https://github.com/morrownr/88x2bu-20210702", "module": "88x2bu", "priority": 2},
+        {"method": "offline", "path": "drivers/88x2bu-20210702", "module": "88x2bu", "priority": 3}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "rtl8192cu",
+      "name": "Realtek RTL8192CU / RTL8188CUS",
+      "vendor": "Realtek",
+      "wifi": "WiFi 4 (802.11n)",
+      "band": "Single-band 2.4 GHz",
+      "monitor_mode": true,
+      "injection": false,
+      "injection_quality": "poor",
+      "notes": "Extremely common legacy chip (Edimax EW-7811Un, TL-WN725N v2). The in-kernel rtl8xxxu driver gets you online, but monitor mode is flaky and injection is unreliable — fine for connectivity, not for serious attacks. Use an AR9271 or MT7612U for real work.",
+      "adapters": ["Edimax EW-7811Un", "TP-Link TL-WN725N v2", "TP-Link TL-WN823N", "D-Link DWA-131"],
+      "usb_ids": ["0bda:8176", "0bda:8177", "0bda:8178", "0bda:817a", "0bda:817b", "0bda:817f", "0bda:818a", "7392:7811", "7392:7822", "050d:1102", "2001:3308", "2001:330b", "0846:9021"],
+      "kernel_native": {"module": "rtl8xxxu", "min_kernel": "4.0", "recommended_kernel": "5.10"},
+      "drivers": [
+        {"method": "dkms_git", "repo": "https://github.com/pvaret/rtl8192cu-fixes", "module": "8192cu", "priority": 1},
+        {"method": "offline", "path": "drivers/rtl8192cu-fixes", "module": "8192cu", "priority": 2}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "rtl8723bu",
+      "name": "Realtek RTL8723BU (WiFi + BT combo)",
+      "vendor": "Realtek",
+      "wifi": "WiFi 4 (802.11n)",
+      "band": "Single-band 2.4 GHz",
+      "monitor_mode": true,
+      "injection": false,
+      "injection_quality": "poor",
+      "notes": "Budget WiFi+Bluetooth combo chip found in many cheap dongles and laptops. In-kernel rtl8xxxu provides connectivity; monitor/injection are unreliable. Included so AirDriver can still get you online.",
+      "adapters": ["Generic WiFi+BT combo dongles", "various laptops"],
+      "usb_ids": ["0bda:b720", "0bda:b72a", "0bda:b728"],
+      "kernel_native": {"module": "rtl8xxxu", "min_kernel": "4.3", "recommended_kernel": "5.10"},
+      "drivers": [
+        {"method": "dkms_git", "repo": "https://github.com/lwfinger/rtl8723bu", "module": "8723bu", "priority": 1},
+        {"method": "offline", "path": "drivers/rtl8723bu", "module": "8723bu", "priority": 2}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "mt7601u",
+      "name": "MediaTek / Ralink MT7601U",
+      "vendor": "MediaTek",
+      "wifi": "WiFi 4 (802.11n)",
+      "band": "Single-band 2.4 GHz",
+      "monitor_mode": true,
+      "injection": false,
+      "injection_quality": "poor",
+      "notes": "Ultra-cheap single-band nano dongle, in-kernel mt7601u since 4.2 (needs the mt7601u.bin firmware blob). Monitor mode works for sniffing but the driver does not support packet injection — good for getting a box online, not for active attacks.",
+      "adapters": ["Generic MT7601U nano dongles", "Ralink MT7601U"],
+      "usb_ids": ["148f:7601", "0e8d:7601", "148f:760a", "148f:760b"],
+      "kernel_native": {"module": "mt7601u", "min_kernel": "4.2", "recommended_kernel": "5.4", "firmware": "mt7601u.bin"},
+      "drivers": [
+        {"method": "kernel_native", "module": "mt7601u", "firmware_pkg": "firmware-misc-nonfree", "priority": 1}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "rt3572_rt5572",
+      "name": "Ralink RT3572 / RT5572 (dual-band)",
+      "vendor": "Ralink / MediaTek",
+      "wifi": "WiFi 4 (802.11n)",
+      "band": "Dual-band 2.4 + 5 GHz",
+      "monitor_mode": true,
+      "injection": true,
+      "injection_quality": "good",
+      "notes": "Reliable old-school dual-band N chips, fully in-kernel via rt2800usb. The RT5572 powers the Panda PAU09 (N600) and ALFA AWUS052NH; the RT3572 powers the ALFA AWUS051NH v1. No build needed.",
+      "adapters": ["ALFA AWUS051NH v1", "ALFA AWUS052NH", "Panda PAU09 (N600)", "D-Link DWA-160 B2"],
+      "usb_ids": ["148f:3572", "148f:5572", "0789:0168", "1740:9603", "0df6:0048", "083a:c522", "043e:7a32", "1737:0078", "0586:3416", "07d1:3c1a"],
+      "kernel_native": {"module": "rt2800usb", "min_kernel": "2.6.39", "recommended_kernel": "any"},
+      "drivers": [
+        {"method": "kernel_native", "module": "rt2800usb", "priority": 1}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "ar9170",
+      "name": "Atheros AR9170 (carl9170)",
+      "vendor": "Qualcomm Atheros",
+      "wifi": "WiFi 4 (802.11n draft)",
+      "band": "Dual-band 2.4 + 5 GHz",
+      "monitor_mode": true,
+      "injection": false,
+      "injection_quality": "poor",
+      "notes": "Legacy draft-N USB chip, in-kernel via carl9170 (needs the carl9170-1.fw firmware blob). Monitor mode works but injection support is weak — kept for completeness and older kits. Prefer AR9271 for 2.4 GHz injection.",
+      "adapters": ["TP-Link TL-WN821N v1/v2", "TP-Link TL-WN822N v1", "Netgear WNDA3100 v1", "D-Link DWA-160 A1/A2"],
+      "usb_ids": ["0cf3:9170", "0cf3:1001", "0cf3:1002", "0846:9010", "07d1:3c10", "0cde:0023", "1740:0605", "04bb:093f", "057c:8401", "057c:8402"],
+      "kernel_native": {"module": "carl9170", "min_kernel": "2.6.37", "recommended_kernel": "any", "firmware": "carl9170-1.fw"},
+      "drivers": [
+        {"method": "kernel_native", "module": "carl9170", "firmware_pkg": "firmware-linux-free", "priority": 1}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "rtl8821ce",
+      "name": "Realtek RTL8821CE (internal PCIe)",
+      "vendor": "Realtek",
+      "wifi": "WiFi 5 (802.11ac)",
+      "band": "Dual-band AC (2.4 + 5 GHz)",
+      "monitor_mode": false,
+      "injection": false,
+      "injection_quality": "poor",
+      "notes": "Very common internal laptop card (Lenovo/HP/Acer). The #1 'my fresh Kali install has no WiFi' chip. In-kernel rtw88_8821ce since ~5.8 gets you online; monitor/injection are not supported — use a USB adapter for pentesting.",
+      "adapters": ["Lenovo IdeaPad / HP / Acer laptops"],
+      "usb_ids": ["10ec:c821"],
+      "kernel_native": {"module": "rtw88_8821ce", "min_kernel": "5.8", "recommended_kernel": "6.1"},
+      "drivers": [
+        {"method": "dkms_git", "repo": "https://github.com/tomaspinho/rtl8821ce", "module": "8821ce", "priority": 1},
+        {"method": "offline", "path": "drivers/rtl8821ce", "module": "8821ce", "priority": 2}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "rtl8822ce",
+      "name": "Realtek RTL8822CE (internal PCIe)",
+      "vendor": "Realtek",
+      "wifi": "WiFi 5 (802.11ac)",
+      "band": "Dual-band AC1200 (2.4 + 5 GHz)",
+      "monitor_mode": false,
+      "injection": false,
+      "injection_quality": "poor",
+      "notes": "Common internal laptop card. In-kernel rtw88_8822ce since ~5.3 provides connectivity; not suitable for monitor mode / injection — pair it with a USB pentest adapter.",
+      "adapters": ["Lenovo / HP / Dell laptops"],
+      "usb_ids": ["10ec:c822", "10ec:c82f"],
+      "kernel_native": {"module": "rtw88_8822ce", "min_kernel": "5.3", "recommended_kernel": "6.1"},
+      "drivers": [
+        {"method": "dkms_git", "repo": "https://github.com/lwfinger/rtw88", "module": "rtw88_8822ce", "priority": 1}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "rtl8723de",
+      "name": "Realtek RTL8723DE (internal PCIe)",
+      "vendor": "Realtek",
+      "wifi": "WiFi 4 (802.11n)",
+      "band": "Single-band 2.4 GHz",
+      "monitor_mode": false,
+      "injection": false,
+      "injection_quality": "poor",
+      "notes": "Budget internal laptop card. In-kernel rtw88_8723de gets you online; no monitor/injection support. Included to fix 'no WiFi after install' on cheap laptops.",
+      "adapters": ["budget laptops"],
+      "usb_ids": ["10ec:d723"],
+      "kernel_native": {"module": "rtw88_8723de", "min_kernel": "5.4", "recommended_kernel": "6.1"},
+      "drivers": [
+        {"method": "dkms_git", "repo": "https://github.com/lwfinger/rtw88", "module": "rtw88_8723de", "priority": 1}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "intel_ax2xx",
+      "name": "Intel WiFi 6/6E (AX200 / AX201 / AX210 / AX211)",
+      "vendor": "Intel",
+      "wifi": "WiFi 6 / 6E (802.11ax)",
+      "band": "Dual/Tri-band AX (2.4 + 5 + 6 GHz)",
+      "monitor_mode": true,
+      "injection": false,
+      "injection_quality": "poor",
+      "notes": "Ubiquitous internal laptop cards. In-kernel iwlwifi (needs the firmware-iwlwifi blobs). Monitor mode works for sniffing, but Intel cards do NOT reliably support packet injection — use an external AR9271/MT7612U/RTL8812AU adapter for attacks.",
+      "adapters": ["Intel AX200", "Intel AX201", "Intel AX210", "Intel AX211"],
+      "usb_ids": ["8086:2723", "8086:02f0", "8086:a0f0", "8086:2725", "8086:7af0", "8086:7e40", "8086:51f0"],
+      "kernel_native": {"module": "iwlwifi", "min_kernel": "5.2", "recommended_kernel": "6.1", "firmware": "iwlwifi-*.ucode"},
+      "drivers": [
+        {"method": "kernel_native", "module": "iwlwifi", "firmware_pkg": "firmware-iwlwifi", "priority": 1}
       ],
       "blacklist": []
     }
