@@ -13,7 +13,7 @@ Long operations (scan, install) run on worker threads so the UI never freezes.
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, QThread, QObject, Signal, QSize, QUrl, QRectF
+from PySide6.QtCore import Qt, QThread, QObject, Signal, QSize, QUrl, QRectF, QTimer
 from PySide6.QtGui import QFont, QDesktopServices, QPixmap, QPainter, QPen, QColor, QIcon
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDialog, QFrame, QHBoxLayout, QLabel,
@@ -166,7 +166,12 @@ class MainWindow(QMainWindow):
         self.adapters: list[Adapter] = []
         self.selected: Adapter | None = None
         self.cards: list[AdapterCard] = []
-        self._thread: QThread | None = None
+        # Strong references to in-flight (QThread, worker) pairs. Keeping them
+        # here until the thread truly finishes is what prevents Python from
+        # garbage-collecting a still-running QThread (which makes Qt abort).
+        self._jobs: list[tuple[QThread, QObject]] = []
+        self._scanning = False
+        self._installing = False
 
         self.setWindowTitle(f"AirDriver {__version__}")
         self.setWindowIcon(QIcon(make_logo(64)))
@@ -358,20 +363,49 @@ class MainWindow(QMainWindow):
         sb = self.log.verticalScrollBar()
         sb.setValue(sb.maximum())
 
+    # ---- worker thread lifecycle ------------------------------------------
+    def _start_worker(self, worker: QObject, on_done) -> None:
+        """Run ``worker.run`` on its own QThread, safely.
+
+        We keep a strong reference to both the thread and the worker in
+        ``self._jobs`` until the thread emits ``finished`` — only then do we
+        tear them down with ``deleteLater``. This is the crucial fix for the
+        "QThread: Destroyed while thread is still running" abort that happened
+        when an install finished and immediately triggered a rescan.
+        """
+        thread = QThread()
+        worker.moveToThread(thread)
+        self._jobs.append((thread, worker))
+        thread.started.connect(worker.run)
+        worker.done.connect(on_done)
+        worker.done.connect(thread.quit)
+        thread.finished.connect(worker.deleteLater)
+        thread.finished.connect(lambda t=thread, w=worker: self._reap(t, w))
+        thread.start()
+
+    def _reap(self, thread: QThread, worker: QObject) -> None:
+        thread.deleteLater()
+        self._jobs = [(t, w) for (t, w) in self._jobs if t is not thread]
+
+    def closeEvent(self, event):
+        # Don't let the process exit while a worker thread is still running.
+        for thread, _ in list(self._jobs):
+            thread.quit()
+            thread.wait(5000)
+        super().closeEvent(event)
+
     # ---- scan --------------------------------------------------------------
     def rescan(self):
+        if self._scanning:
+            return
+        self._scanning = True
         self.btn_rescan.setEnabled(False)
         self.btn_rescan.setText("Scanning…")
         self.log_line("Scanning USB/PCI bus and wireless interfaces…")
-        self._thread = QThread()
-        self.worker = ScanWorker(self.db)
-        self.worker.moveToThread(self._thread)
-        self._thread.started.connect(self.worker.run)
-        self.worker.done.connect(self._on_scan_done)
-        self.worker.done.connect(self._thread.quit)
-        self._thread.start()
+        self._start_worker(ScanWorker(self.db), self._on_scan_done)
 
     def _on_scan_done(self, info, adapters):
+        self._scanning = False
         self.sysinfo = info
         self.adapters = adapters
         self._render_status(info)
@@ -495,6 +529,8 @@ class MainWindow(QMainWindow):
         self.log_line(plan.describe())
 
     def install_selected(self):
+        if self._installing:
+            return
         plan = self._make_plan()
         if plan is None:
             return
@@ -511,22 +547,21 @@ class MainWindow(QMainWindow):
             if box.exec() == QMessageBox.Cancel:
                 return
 
+        self._installing = True
         self.log.clear()
         self._set_busy(True)
-        self._thread = QThread()
-        self.iworker = InstallWorker(plan, self.sysinfo, self.cb_dry.isChecked())
-        self.iworker.moveToThread(self._thread)
-        self._thread.started.connect(self.iworker.run)
-        self.iworker.line.connect(self.log_line)
-        self.iworker.done.connect(self._on_install_done)
-        self.iworker.done.connect(self._thread.quit)
-        self._thread.start()
+        worker = InstallWorker(plan, self.sysinfo, self.cb_dry.isChecked())
+        worker.line.connect(self.log_line)
+        self._start_worker(worker, self._on_install_done)
 
     def _on_install_done(self, ok: bool):
+        self._installing = False
         self._set_busy(False)
         self.log_line("\n" + ("✓ Done." if ok else "✗ Finished with errors — see log."))
-        # Refresh state so the card status/badges update.
-        self.rescan()
+        # Refresh state so the card status/badges update — but defer it so the
+        # just-finished install thread fully winds down before the scan thread
+        # starts (never overlap thread teardown with new-thread startup).
+        QTimer.singleShot(0, self.rescan)
 
     def _set_busy(self, busy: bool):
         for b in (self.btn_install, self.btn_plan, self.btn_rescan):
