@@ -22,10 +22,10 @@ from PySide6.QtWidgets import (
 )
 
 from .. import __version__, __codename__
-from ..core import detector, report as rep, system
+from ..core import detector, report as rep, system, verify
 from ..core.chipset_db import Chipset, ChipsetDB
 from ..core.detector import Adapter
-from ..core.installer import Executor, build_plan
+from ..core.installer import Executor, build_plan, build_remove_plan
 from . import theme as T
 
 REPO_URL = "https://github.com/at0m-b0mb/AirDriver"
@@ -84,6 +84,18 @@ class InstallWorker(QObject):
         ok = Executor(self.info, dry_run=self.dry_run).run(
             self.plan, log=lambda s: self.line.emit(s))
         self.done.emit(ok)
+
+
+class VerifyWorker(QObject):
+    """Runs the (slightly slow: lsmod/iw/dmesg) post-install health check."""
+    done = Signal(object)  # verify.Health
+
+    def __init__(self, chip: Chipset, info, usb_id):
+        super().__init__()
+        self.chip, self.info, self.usb_id = chip, info, usb_id
+
+    def run(self):
+        self.done.emit(verify.check(self.chip, self.info, usb_id=self.usb_id))
 
 
 # --------------------------------------------------------------------------- #
@@ -172,6 +184,8 @@ class MainWindow(QMainWindow):
         self._jobs: list[tuple[QThread, QObject]] = []
         self._scanning = False
         self._installing = False
+        # When set, a finished install auto-runs verification for (chip, usb_id).
+        self._verify_after: tuple[Chipset, str] | None = None
 
         self.setWindowTitle(f"AirDriver {__version__}")
         self.setWindowIcon(QIcon(make_logo(64)))
@@ -334,6 +348,15 @@ class MainWindow(QMainWindow):
         self.btn_plan = QPushButton("Preview plan")
         self.btn_plan.setEnabled(False)
         self.btn_plan.clicked.connect(self.preview_plan)
+        self.btn_verify = QPushButton("✔ Verify")
+        self.btn_verify.setToolTip("Check the driver is built, loaded and bound to the adapter")
+        self.btn_verify.setEnabled(False)
+        self.btn_verify.clicked.connect(self.verify_selected)
+        self.btn_remove = QPushButton("Remove driver")
+        self.btn_remove.setObjectName("Ghost")
+        self.btn_remove.setToolTip("Cleanly remove this driver (dkms/apt) so you can retry from scratch")
+        self.btn_remove.setEnabled(False)
+        self.btn_remove.clicked.connect(self.remove_selected)
         self.btn_copylog = QPushButton("Copy log")
         self.btn_copylog.setToolTip("Copy the activity log to the clipboard (handy for forum help threads)")
         self.btn_copylog.clicked.connect(self.copy_log)
@@ -342,7 +365,9 @@ class MainWindow(QMainWindow):
         self.btn_report.clicked.connect(self.export_report)
         actions.addWidget(self.btn_install)
         actions.addWidget(self.btn_plan)
+        actions.addWidget(self.btn_verify)
         actions.addStretch(1)
+        actions.addWidget(self.btn_remove)
         actions.addWidget(self.btn_copylog)
         actions.addWidget(self.btn_report)
         lay.addLayout(actions)
@@ -482,6 +507,8 @@ class MainWindow(QMainWindow):
         self.identify_row.setVisible(not known)
         self.btn_install.setEnabled(True)
         self.btn_plan.setEnabled(True)
+        self.btn_verify.setEnabled(True)
+        self.btn_remove.setEnabled(True)
         if known:
             c = a.chipset
             drivers = " → ".join(d.method for d in c.best_drivers())
@@ -547,24 +574,97 @@ class MainWindow(QMainWindow):
             if box.exec() == QMessageBox.Cancel:
                 return
 
+        dry = self.cb_dry.isChecked()
+        # After a real install, automatically verify the driver actually loaded.
+        self._verify_after = (plan.chipset, self.selected.usb_id) if (
+            not dry and self.sysinfo and self.sysinfo.is_linux and plan.chipset) else None
         self._installing = True
         self.log.clear()
         self._set_busy(True)
-        worker = InstallWorker(plan, self.sysinfo, self.cb_dry.isChecked())
+        worker = InstallWorker(plan, self.sysinfo, dry)
         worker.line.connect(self.log_line)
         self._start_worker(worker, self._on_install_done)
 
     def _on_install_done(self, ok: bool):
         self._installing = False
+        self.log_line("\n" + ("✓ Install steps finished."
+                              if ok else "✗ Finished with errors — see log."))
+        target = self._verify_after
+        self._verify_after = None
+        if target and target[0]:
+            chip, usb = target
+            self.log_line(f"\nVerifying {chip.name} — checking the driver actually loaded…")
+            self._start_worker(VerifyWorker(chip, self.sysinfo, usb), self._on_verify_done)
+        else:
+            self._set_busy(False)
+            QTimer.singleShot(0, self.rescan)
+
+    # ---- verify / remove ---------------------------------------------------
+    def _selected_chip(self):
+        a = self._resolve_target()
+        if a is None or a.chipset is None:
+            return None, None
+        return a.chipset, a.usb_id
+
+    def verify_selected(self):
+        if self._installing:
+            return
+        chip, usb = self._selected_chip()
+        if chip is None:
+            return
+        self.log.clear()
+        self.log_line(f"Verifying {chip.name}…")
+        self._set_busy(True)
+        self._start_worker(VerifyWorker(chip, self.sysinfo, usb), self._on_verify_done)
+
+    def _on_verify_done(self, health):
         self._set_busy(False)
-        self.log_line("\n" + ("✓ Done." if ok else "✗ Finished with errors — see log."))
-        # Refresh state so the card status/badges update — but defer it so the
-        # just-finished install thread fully winds down before the scan thread
-        # starts (never overlap thread teardown with new-thread startup).
+        self.log_line("\n" + verify.describe(health))
+        head = {
+            "working":     "✓ Working — the driver is loaded and your adapter is ready.",
+            "no_iface":    "Almost there — module loaded but no interface yet. Re-plug the adapter and Rescan.",
+            "secure_boot": "Blocked by Secure Boot — the built module can't load until you disable it or enroll a MOK key.",
+            "not_loaded":  "Built but not loaded — try a reboot, or re-plug and hit Verify again.",
+            "not_built":   "The driver did not build for this kernel — see the log for why.",
+            "demo":        "Demo mode — run on Kali/Parrot to verify for real.",
+        }.get(health.verdict, "Verification finished.")
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Information if health.ok else QMessageBox.Warning)
+        box.setWindowTitle("Driver verification")
+        box.setText(head)
+        if not health.ok and health.messages:
+            box.setInformativeText("\n".join(m for m in health.messages if m)[:700])
+        box.exec()
         QTimer.singleShot(0, self.rescan)
 
+    def remove_selected(self):
+        if self._installing:
+            return
+        chip, _ = self._selected_chip()
+        if chip is None:
+            return
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Warning)
+        box.setWindowTitle("Remove driver")
+        box.setText(f"Remove the installed driver for {chip.name}?")
+        box.setInformativeText(
+            "Runs dkms/apt removal and unloads the module so you can retry a clean "
+            "install. In-kernel drivers are left untouched.")
+        box.setStandardButtons(QMessageBox.Yes | QMessageBox.Cancel)
+        if box.exec() != QMessageBox.Yes:
+            return
+        plan = build_remove_plan(chip, self.sysinfo)
+        self._verify_after = None
+        self._installing = True
+        self.log.clear()
+        self._set_busy(True)
+        worker = InstallWorker(plan, self.sysinfo, False)
+        worker.line.connect(self.log_line)
+        self._start_worker(worker, self._on_install_done)
+
     def _set_busy(self, busy: bool):
-        for b in (self.btn_install, self.btn_plan, self.btn_rescan):
+        for b in (self.btn_install, self.btn_plan, self.btn_rescan,
+                  self.btn_verify, self.btn_remove):
             b.setEnabled(not busy)
         self.btn_install.setText("Installing…" if busy else "⬇  Install driver")
 

@@ -60,6 +60,14 @@ them on an air-gapped machine.
   live wireless interfaces from sysfs, and maps `VID:PID` → chipset.
 - 🧠 **Smart driver selection** — prefers the **in-kernel** driver when your kernel is
   new enough (no pointless DKMS build), otherwise apt → DKMS-from-git → offline bundle.
+  For out-of-tree drivers it runs the maintainer's own `install-driver.sh` (morrownr /
+  aircrack-ng) non-interactively, so the build is done the *correct*, supported way.
+- ✅ **Verified installs** — after building, AirDriver checks the driver is really
+  **built, loaded, and bound** to your adapter (not just "the build exited 0") and gives
+  an honest verdict with the exact fix when it isn't — Secure Boot, missing firmware,
+  a conflicting in-kernel module, or a needed re-plug/reboot.
+- 🧹 **Remove & fix** — `airdriver remove` cleanly wipes a half-broken driver for a fresh
+  retry; `airdriver fix` reloads it (depmod + modprobe); both surface the relevant `dmesg`.
 - 🌐 **Hybrid online/offline** — uses apt/git when connected, falls back to a
   pre-fetched offline copy when not.
 - 🩺 **System doctor** — checks kernel headers, DKMS, build tools, **Secure Boot**, and
@@ -170,11 +178,17 @@ airdriver info 0bda:8812        # database details for a usb id / chipset id
 airdriver install               # install driver for the first known adapter
 airdriver install rtl8812au --dry-run   # preview the plan for a chipset
 airdriver install 0bda:c811 --offline   # force the bundled offline driver
+airdriver verify                # did the driver really install, load & bind?
+airdriver fix                   # reload the driver (depmod + modprobe) and re-check
+airdriver remove rtl8814au      # cleanly remove a driver to retry from scratch
 airdriver monitor start wlan0   # enable monitor mode
 airdriver monitor test wlan0    # aireplay-ng injection self-test
 airdriver report                # write a JSON + Markdown diagnostic report
 airdriver db                    # dump the chipset database
 ```
+
+Every install ends with a **verification report** — it confirms the module is built,
+loaded, and bound to your adapter, or tells you precisely what to fix.
 
 ## 🛟 Troubleshooting
 
@@ -190,6 +204,23 @@ This is the #1 issue and AirDriver now handles it for you:
                       libxcb-randr0 libxcb-render-util0 libxcb-shape0
   ```
   (`sudo ./install.sh` installs all of these for you.)
+
+**The driver "installed" but my adapter still doesn't work.**
+AirDriver now verifies every install and prints the verdict. To re-check or recover:
+```bash
+airdriver verify              # is it built, loaded, and bound to the adapter?
+airdriver fix                 # reload it (depmod + modprobe) and re-check
+airdriver remove <chipset> && airdriver install <chipset>   # clean retry from scratch
+```
+The usual culprits:
+- **Secure Boot is ON** — a freshly built DKMS module is unsigned, so the kernel refuses
+  to load it. Disable Secure Boot in firmware, or `sudo mokutil --disable-validation`
+  then reboot and follow the blue MOK screen.
+- **No re-plug / reboot yet** — unplug and re-plug the adapter, then `airdriver scan`.
+  High-power cards like the **AWUS1900 (RTL8814AU)** want a USB 2.0 port or a *powered*
+  hub — they can brown-out on an unpowered USB 3 port.
+- **Kernel headers missing** — `sudo apt install -y linux-headers-$(uname -r)`, then
+  `airdriver remove <chipset> && airdriver install <chipset>`.
 
 **`airdriver: command not found` after installing.**
 The launcher went to `~/.local/bin` (non-root install). Add it to your PATH:
@@ -319,7 +350,7 @@ responsible for staying within the law and your rules of engagement.
 AirDriver/
 ├── airdriver/
 │   ├── core/            # detection, database, system probes, install engine
-│   │   ├── chipset_db.py    detector.py   system.py
+│   │   ├── chipset_db.py    detector.py   system.py    verify.py
 │   │   ├── installer.py     monitor.py    modules.py   report.py
 │   ├── data/chipsets.json   # the chipset → driver database (28 families)
 │   ├── data/drivers/        # offline driver bundle (populated by script)

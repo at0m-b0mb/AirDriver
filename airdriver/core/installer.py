@@ -13,6 +13,7 @@ Design goals:
 from __future__ import annotations
 
 import os
+import re
 import shlex
 import subprocess
 from dataclasses import dataclass, field
@@ -142,38 +143,76 @@ def select_driver(chipset: Chipset, sysinfo: SystemInfo,
 # --------------------------------------------------------------------------- #
 # Plan building                                                               #
 # --------------------------------------------------------------------------- #
-_DKMS_BUILD = """\
+# The build script. `__FETCH__` is substituted with a snippet that puts the
+# driver source in $SRC. We deliberately prefer the *driver's own* installer:
+# morrownr / aircrack-ng ship an `install-driver.sh` that does the complete,
+# correct job (stage to /usr/src, dkms add/build/install, write the modprobe.d
+# conf, blacklist the conflicting in-kernel module, depmod, and load it). The
+# old code ran a bare `dkms add . && dkms autoinstall` and skipped all of that,
+# which is exactly why a build could "succeed" yet the adapter never worked.
+_DKMS_BUILD = r"""
 set -e
-BUILD="$(mktemp -d)"
-echo "[airdriver] build dir: $BUILD"
-{fetch}
+__FETCH__
 cd "$SRC"
-if [ -f dkms.conf ]; then
-  echo "[airdriver] registering with DKMS"
-  sudo dkms add . 2>/dev/null || true
-  sudo dkms autoinstall
-elif [ -f install-driver.sh ]; then
-  echo "[airdriver] running repo install-driver.sh"
-  sudo bash ./install-driver.sh
+echo "[airdriver] driver source ready: $SRC"
+
+make_install() {
+  echo "[airdriver] no installer script — building with make"
+  make clean >/dev/null 2>&1 || true
+  make
+  sudo make install
+}
+
+if [ -f install-driver.sh ]; then
+  echo "[airdriver] running the driver's own installer (non-interactive: NoPrompt)"
+  # morrownr & aircrack-ng installers accept NoPrompt to skip questions/reboot.
+  sudo bash ./install-driver.sh NoPrompt
+elif [ -f dkms-install.sh ]; then
+  echo "[airdriver] running dkms-install.sh"
+  sudo bash ./dkms-install.sh
+elif [ -f dkms.conf ]; then
+  echo "[airdriver] installing via DKMS"
+  NAME="$(sed -n 's/.*PACKAGE_NAME[ =]*//p' dkms.conf | head -1 | tr -dc 'A-Za-z0-9._-')"
+  VER="$(sed -n 's/.*PACKAGE_VERSION[ =]*//p' dkms.conf | head -1 | tr -dc 'A-Za-z0-9._-')"
+  if [ -n "$NAME" ] && [ -n "$VER" ]; then
+    DEST="/usr/src/${NAME}-${VER}"
+    echo "[airdriver] staging source at $DEST"
+    sudo rm -rf "$DEST"; sudo mkdir -p "$DEST"
+    sudo cp -a "$SRC"/. "$DEST"/
+    sudo dkms remove -m "$NAME" -v "$VER" --all 2>/dev/null || true
+    sudo dkms add -m "$NAME" -v "$VER" 2>/dev/null || true
+    sudo dkms build -m "$NAME" -v "$VER"
+    sudo dkms install -m "$NAME" -v "$VER" --force
+  else
+    make_install
+  fi
 else
-  echo "[airdriver] falling back to make"
-  make && sudo make install
+  make_install
 fi
+
+echo "[airdriver] updating module dependency map"
+sudo depmod -a
+echo "[airdriver] driver build/install finished"
 """
 
 
+def _build_script(fetch: str) -> str:
+    return _DKMS_BUILD.replace("__FETCH__", fetch)
+
+
 def _dkms_step_git(option: DriverOption) -> Step:
-    fetch = (f'SRC="$BUILD/src"\n'
+    fetch = (f'SRC="$(mktemp -d)/src"\n'
              f'git clone --depth=1 {shlex.quote(option.repo)} "$SRC"')
     return Step(title=f"Build & install DKMS driver from {option.repo}",
-                shell=_DKMS_BUILD.format(fetch=fetch), privileged=True)
+                shell=_build_script(fetch), privileged=True)
 
 
 def _dkms_step_offline(option: DriverOption, src: Path) -> Step:
-    fetch = (f'SRC="$BUILD/src"\n'
-             f'cp -r {shlex.quote(str(src))} "$SRC"')
+    fetch = (f'SRC="$(mktemp -d)/src"\n'
+             f'mkdir -p "$SRC"\n'
+             f'cp -a {shlex.quote(str(src))}/. "$SRC"/')
     return Step(title=f"Build & install bundled offline driver ({option.path})",
-                shell=_DKMS_BUILD.format(fetch=fetch), privileged=True)
+                shell=_build_script(fetch), privileged=True)
 
 
 def build_plan(adapter: Adapter, sysinfo: SystemInfo, *,
@@ -268,9 +307,66 @@ def _append_conflict_and_load(plan: InstallPlan, chip: Chipset, module: str) -> 
     plan.steps.append(Step(title="Rebuild module dependency map",
                            shell="sudo depmod -a", privileged=True, optional=True))
     if module:
-        plan.steps.append(Step(title=f"Load driver module '{module}'",
-                               shell=f"sudo modprobe {module} 2>/dev/null || true",
-                               privileged=True, optional=True))
+        plan.steps.append(Step(
+            title=f"Load driver module '{module}'",
+            # Show modprobe's error if it fails (Secure Boot, missing firmware,
+            # conflict…) instead of hiding it — verification reports the verdict.
+            shell=f"sudo modprobe {module} || echo \"[airdriver] modprobe {module} "
+                  f"failed — see the verification report below for why\"",
+            privileged=True, optional=True))
+
+
+# --------------------------------------------------------------------------- #
+# Removal (clean slate for a retry)                                           #
+# --------------------------------------------------------------------------- #
+def build_remove_plan(chip: Chipset, sysinfo: SystemInfo) -> InstallPlan:
+    """Steps to cleanly remove a (possibly half-broken) driver for ``chip`` so
+    the user can retry from scratch. Removes DKMS modules + apt packages and
+    unloads the out-of-tree module. Never touches in-kernel drivers."""
+    plan = InstallPlan(adapter=None, chipset=chip, method="remove",
+                       summary=f"Remove installed driver(s) for {chip.name}",
+                       needs_reboot=False)
+    oot_modules = sorted({d.module for d in chip.drivers
+                          if d.method in ("dkms_git", "offline") and d.module})
+    apt_pkgs = sorted({d.package for d in chip.drivers
+                       if d.method == "apt" and d.package})
+
+    if not oot_modules and not apt_pkgs:
+        plan.steps.append(Step(
+            title="Nothing to remove — this chipset uses the in-kernel driver only.",
+            kind="note"))
+        return plan
+
+    if oot_modules:
+        pattern = "|".join(re.escape(m) for m in oot_modules)
+        plan.steps.append(Step(
+            title=f"Remove DKMS modules ({', '.join(oot_modules)})",
+            privileged=True, optional=True,
+            shell=(
+                f'PATTERN={shlex.quote(pattern)}\n'
+                'dkms status 2>/dev/null | grep -E "$PATTERN" | sed "s/[,:].*//" '
+                '| sort -u | while read -r mod; do\n'
+                '  [ -n "$mod" ] || continue\n'
+                '  echo "[airdriver] dkms remove $mod"\n'
+                '  sudo dkms remove "$mod" --all 2>/dev/null || sudo dkms remove "$mod" 2>/dev/null || true\n'
+                'done\n'
+                'echo "[airdriver] dkms cleanup done"')))
+        for m in oot_modules:
+            plan.steps.append(Step(
+                title=f"Unload module '{m}' if loaded",
+                shell=f"sudo modprobe -r {m} 2>/dev/null || true",
+                privileged=True, optional=True))
+
+    for pkg in apt_pkgs:
+        plan.steps.append(Step(
+            title=f"Remove apt package '{pkg}' (if installed)",
+            shell=f"dpkg -l {pkg} >/dev/null 2>&1 && sudo apt-get remove -y {pkg} || true",
+            privileged=True, optional=True))
+
+    plan.steps.append(Step(title="Rebuild module dependency map",
+                           shell="sudo depmod -a", privileged=True, optional=True))
+    plan.warnings.append("After removal, re-plug the adapter and run a fresh install.")
+    return plan
 
 
 # --------------------------------------------------------------------------- #

@@ -17,9 +17,9 @@ import argparse
 import sys
 
 from . import __version__, __codename__
-from .core import detector, monitor as mon, report as rep, system
+from .core import detector, monitor as mon, report as rep, system, verify
 from .core.chipset_db import ChipsetDB
-from .core.installer import Executor, build_plan, select_driver
+from .core.installer import Executor, build_plan, build_remove_plan, select_driver
 
 # --- tiny ANSI helpers (no dependency) ------------------------------------- #
 _USE_COLOR = sys.stdout.isatty()
@@ -163,8 +163,15 @@ def cmd_install(args, db: ChipsetDB) -> int:
         if ans not in ("y", "yes"):
             print("Aborted.")
             return 1
-    ok = Executor(info, dry_run=False).run(plan, log=print)
-    return 0 if ok else 2
+    Executor(info, dry_run=False).run(plan, log=print)
+
+    # Honest post-install check — did the driver actually load and bind?
+    if target.chipset and info.is_linux:
+        print(bold("\n── Verification ─────────────────────────────"))
+        h = verify.check(target.chipset, info, usb_id=target.usb_id)
+        print(verify.describe(h))
+        return 0 if h.ok else 2
+    return 0
 
 
 def _unknown_flow(adapter, db: ChipsetDB) -> int:
@@ -228,6 +235,77 @@ def cmd_db(args, db: ChipsetDB) -> int:
     return 0
 
 
+def _resolve_chip(target, db: ChipsetDB):
+    """Return (chipset, usb_id_or_None) from a usb id, a chipset id, or — when
+    no target is given — the first detected adapter that's in the database."""
+    if target:
+        chip = db.match_usb(target)
+        if chip:
+            return chip, target.lower()
+        chip = db.get(target.lower())
+        return chip, None
+    for a in detector.detect(db):
+        if a.known:
+            return a.chipset, a.usb_id
+    return None, None
+
+
+def cmd_verify(args, db: ChipsetDB) -> int:
+    info = system.gather()
+    chip, usb = _resolve_chip(args.target, db)
+    if chip is None:
+        print(red("No known adapter or chipset to verify. Try: airdriver scan"))
+        return 1
+    print(bold(f"\nVerifying {chip.name}…\n"))
+    h = verify.check(chip, info, usb_id=usb)
+    print(verify.describe(h))
+    return 0 if h.ok else 2
+
+
+def cmd_remove(args, db: ChipsetDB) -> int:
+    info = system.gather()
+    chip, _ = _resolve_chip(args.target, db)
+    if chip is None:
+        print(red(f"'{args.target}' is not a known adapter or chipset."))
+        return 1
+    plan = build_remove_plan(chip, info)
+    print(plan.describe())
+    if not args.yes:
+        if input(bold("\nRemove the above? [y/N] ")).strip().lower() not in ("y", "yes"):
+            print("Aborted.")
+            return 1
+    ok = Executor(info).run(plan, log=print)
+    print(green("\n✓ Removed. Re-plug the adapter, then: airdriver install "
+                f"{chip.id}") if ok else yellow("\nRemoval finished with warnings."))
+    return 0 if ok else 2
+
+
+def cmd_fix(args, db: ChipsetDB) -> int:
+    """Reload the driver (depmod + modprobe) and re-verify — the quick 'it built
+    but isn't loaded' rescue that avoids a full reinstall."""
+    from .core.installer import InstallPlan, Step
+    info = system.gather()
+    chip, usb = _resolve_chip(args.target, db)
+    if chip is None:
+        print(red("Nothing to fix — no known adapter/chipset. Try: airdriver scan"))
+        return 1
+    mods = verify.expected_modules(chip)
+    plan = InstallPlan(adapter=None, chipset=chip, method="fix",
+                       summary=f"Reload driver for {chip.name}", needs_reboot=False)
+    plan.steps.append(Step(title="Rebuild module dependency map",
+                           shell="sudo depmod -a", privileged=True, optional=True))
+    for m in mods:
+        plan.steps.append(Step(
+            title=f"Reload module '{m}'",
+            shell=f"sudo modprobe -r {m} 2>/dev/null; sudo modprobe {m} 2>&1 || true",
+            privileged=True, optional=True))
+    Executor(info).run(plan, log=print)
+    print(bold("\n── Verification ─────────────────────────────"))
+    h = verify.check(chip, info, usb_id=usb)
+    print(verify.describe(h))
+    return 0 if h.ok else 2
+
+
 def cmd_gui(args, db: ChipsetDB) -> int:
     try:
         from .gui.app import run as run_gui
@@ -269,12 +347,23 @@ def build_parser() -> argparse.ArgumentParser:
     pm = sub.add_parser("monitor", help="Monitor mode / injection test")
     pm.add_argument("action", choices=["start", "stop", "test", "killservices"])
     pm.add_argument("interface", nargs="?", default="wlan0")
+
+    pvf = sub.add_parser("verify", help="Check a driver is installed, loaded & bound")
+    pvf.add_argument("target", nargs="?", help="usb id / chipset id (default: first detected)")
+
+    prm = sub.add_parser("remove", help="Cleanly remove a driver (for a fresh retry)")
+    prm.add_argument("target", help="usb id or chipset id")
+    prm.add_argument("--yes", "-y", action="store_true", help="Don't prompt")
+
+    pfx = sub.add_parser("fix", help="Reload the driver (depmod + modprobe) and re-check")
+    pfx.add_argument("target", nargs="?", help="usb id / chipset id (default: first detected)")
     return p
 
 
 _DISPATCH = {
     "scan": cmd_scan, "doctor": cmd_doctor, "info": cmd_info, "install": cmd_install,
     "monitor": cmd_monitor, "report": cmd_report, "db": cmd_db, "gui": cmd_gui,
+    "verify": cmd_verify, "remove": cmd_remove, "fix": cmd_fix,
 }
 
 
