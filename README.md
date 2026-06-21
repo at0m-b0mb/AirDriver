@@ -66,8 +66,14 @@ them on an air-gapped machine.
   **built, loaded, and bound** to your adapter (not just "the build exited 0") and gives
   an honest verdict with the exact fix when it isn't — Secure Boot, missing firmware,
   a conflicting in-kernel module, or a needed re-plug/reboot.
+- 📡 **Brings it online** — after loading the module it unblocks `rfkill`, brings the
+  interface up, and nudges NetworkManager, so a clean build is a *working* adapter and
+  not just a loaded module.
 - 🧹 **Remove & fix** — `airdriver remove` cleanly wipes a half-broken driver for a fresh
   retry; `airdriver fix` reloads it (depmod + modprobe); both surface the relevant `dmesg`.
+- 🩺 **One-shot `diagnose`** — `airdriver diagnose` prints (and copies) a complete snapshot
+  — kernel/headers, Secure Boot, rfkill, USB/PCI list, interfaces, modules, DKMS, and the
+  `dmesg` tail — the single thing to paste when you ask for help.
 - 🌐 **Hybrid online/offline** — uses apt/git when connected, falls back to a
   pre-fetched offline copy when not.
 - 🩺 **System doctor** — checks kernel headers, DKMS, build tools, **Secure Boot**, and
@@ -181,6 +187,7 @@ airdriver install 0bda:c811 --offline   # force the bundled offline driver
 airdriver verify                # did the driver really install, load & bind?
 airdriver fix                   # reload the driver (depmod + modprobe) and re-check
 airdriver remove rtl8814au      # cleanly remove a driver to retry from scratch
+airdriver diagnose              # full snapshot to share when stuck (rfkill, dmesg, dkms…)
 airdriver monitor start wlan0   # enable monitor mode
 airdriver monitor test wlan0    # aireplay-ng injection self-test
 airdriver report                # write a JSON + Markdown diagnostic report
@@ -206,21 +213,30 @@ This is the #1 issue and AirDriver now handles it for you:
   (`sudo ./install.sh` installs all of these for you.)
 
 **The driver "installed" but my adapter still doesn't work.**
-AirDriver now verifies every install and prints the verdict. To re-check or recover:
+First, get the full picture in one command (it's also copied to your clipboard):
+```bash
+sudo airdriver diagnose       # share this output when asking for help
+```
+Then re-check or recover:
 ```bash
 airdriver verify              # is it built, loaded, and bound to the adapter?
 airdriver fix                 # reload it (depmod + modprobe) and re-check
 airdriver remove <chipset> && airdriver install <chipset>   # clean retry from scratch
 ```
-The usual culprits:
+The usual culprits (AirDriver now handles the first two automatically, but check them if
+it's still dead):
+- **Radio is rfkill-blocked** — the module loads but the radio is soft-blocked, so nothing
+  transmits. Fix: `sudo rfkill unblock all`.
+- **Interface is down** — `sudo ip link set wlan0 up` (AirDriver does this after install).
 - **Secure Boot is ON** — a freshly built DKMS module is unsigned, so the kernel refuses
   to load it. Disable Secure Boot in firmware, or `sudo mokutil --disable-validation`
   then reboot and follow the blue MOK screen.
 - **No re-plug / reboot yet** — unplug and re-plug the adapter, then `airdriver scan`.
   High-power cards like the **AWUS1900 (RTL8814AU)** want a USB 2.0 port or a *powered*
   hub — they can brown-out on an unpowered USB 3 port.
-- **Kernel headers missing** — `sudo apt install -y linux-headers-$(uname -r)`, then
-  `airdriver remove <chipset> && airdriver install <chipset>`.
+- **Kernel headers don't match the running kernel** — if you upgraded but didn't reboot,
+  DKMS builds for the wrong kernel. `sudo apt update && sudo apt full-upgrade`, **reboot**,
+  then `airdriver remove <chipset> && airdriver install <chipset>`.
 
 **`airdriver: command not found` after installing.**
 The launcher went to `~/.local/bin` (non-root install). Add it to your PATH:

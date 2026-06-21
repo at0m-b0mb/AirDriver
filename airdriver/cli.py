@@ -17,7 +17,7 @@ import argparse
 import sys
 
 from . import __version__, __codename__
-from .core import detector, monitor as mon, report as rep, system, verify
+from .core import detector, diagnose, monitor as mon, report as rep, system, verify
 from .core.chipset_db import ChipsetDB
 from .core.installer import Executor, build_plan, build_remove_plan, select_driver
 
@@ -306,6 +306,21 @@ def cmd_fix(args, db: ChipsetDB) -> int:
     return 0 if h.ok else 2
 
 
+def cmd_diagnose(args, db: ChipsetDB) -> int:
+    text = diagnose.snapshot(db)
+    print(text)
+    if getattr(args, "save", False):
+        import datetime
+        from pathlib import Path
+        p = Path.cwd() / f"airdriver-diagnostic-{datetime.datetime.now():%Y%m%d-%H%M%S}.txt"
+        try:
+            p.write_text(text)
+            print(green(f"\nSaved to {p}"))
+        except OSError as exc:
+            print(red(f"\nCould not save: {exc}"))
+    return 0
+
+
 def cmd_gui(args, db: ChipsetDB) -> int:
     try:
         from .gui.app import run as run_gui
@@ -357,6 +372,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     pfx = sub.add_parser("fix", help="Reload the driver (depmod + modprobe) and re-check")
     pfx.add_argument("target", nargs="?", help="usb id / chipset id (default: first detected)")
+
+    pdg = sub.add_parser("diagnose", help="Full diagnostic snapshot to share when stuck")
+    pdg.add_argument("--save", action="store_true", help="Also write it to a .txt file")
     return p
 
 
@@ -364,6 +382,7 @@ _DISPATCH = {
     "scan": cmd_scan, "doctor": cmd_doctor, "info": cmd_info, "install": cmd_install,
     "monitor": cmd_monitor, "report": cmd_report, "db": cmd_db, "gui": cmd_gui,
     "verify": cmd_verify, "remove": cmd_remove, "fix": cmd_fix,
+    "diagnose": cmd_diagnose,
 }
 
 

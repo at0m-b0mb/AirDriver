@@ -79,6 +79,27 @@ def dkms_status_for(chip: Chipset) -> list[str]:
     return hits
 
 
+def rfkill_blocked() -> list[str]:
+    """Wireless radios that are soft/hard blocked — a blocked radio looks exactly
+    like 'the driver doesn't work' even when the module loaded fine."""
+    rc, out = _run(["rfkill", "list"])
+    if rc != 0 or not out:
+        return []
+    blocked, cur, is_wifi = [], None, False
+    for line in out.splitlines():
+        m = re.match(r"^\s*\d+:\s*([^:]+):\s*(.*)$", line)
+        if m:
+            cur = m.group(1).strip()
+            is_wifi = any(w in (m.group(2) + cur).lower()
+                          for w in ("wlan", "wireless", "wifi", "phy"))
+        elif cur and is_wifi and "blocked: yes" in line.lower():
+            kind = "hard" if "hard" in line.lower() else "soft"
+            entry = f"{cur} ({kind}-blocked)"
+            if entry not in blocked:
+                blocked.append(entry)
+    return blocked
+
+
 def dmesg_driver_lines(chip: Chipset, max_lines: int = 12) -> list[str]:
     """Recent kernel-log lines relevant to this chipset / Wi-Fi driver errors."""
     rc, out = _run(_maybe_sudo(["dmesg", "--ctime"]))
@@ -113,8 +134,9 @@ class Health:
     interface: Optional[str] = None      # wlan iface bound to this adapter
     interface_driver: Optional[str] = None
     secure_boot: str = "unknown"
+    rfkill: list[str] = field(default_factory=list)
     dmesg: list[str] = field(default_factory=list)
-    verdict: str = "unknown"             # working|not_loaded|secure_boot|not_built|no_iface|demo
+    verdict: str = "unknown"             # working|rfkill|not_loaded|secure_boot|not_built|no_iface|demo
     messages: list[str] = field(default_factory=list)
 
     @property
@@ -161,11 +183,19 @@ def check(chip: Chipset, info: SystemInfo, usb_id: Optional[str] = None) -> Heal
         h.interface = ifaces[0].name
         h.interface_driver = ifaces[0].driver
 
-    # 5. Kernel log breadcrumbs.
+    # 5. Kernel log breadcrumbs + radio kill switches.
     h.dmesg = dmesg_driver_lines(chip)
+    h.rfkill = rfkill_blocked()
 
     # --- verdict + guidance ------------------------------------------------
-    if h.interface:
+    if h.interface and h.rfkill:
+        h.verdict = "rfkill"
+        h.messages.append(
+            f"Interface {h.interface} exists, but its radio is BLOCKED "
+            f"({', '.join(h.rfkill)}) — that's why it 'doesn't work'. Unblock it:")
+        h.messages.append("    sudo rfkill unblock all")
+        h.messages.append(f"    sudo ip link set {h.interface} up")
+    elif h.interface:
         h.verdict = "working"
         h.messages.append(
             f"Interface {h.interface} is present (driver: {h.interface_driver or '?'}). "
@@ -176,6 +206,9 @@ def check(chip: Chipset, info: SystemInfo, usb_id: Optional[str] = None) -> Heal
         h.verdict = "no_iface"
         h.messages.append(
             f"Module '{h.loaded_module}' is loaded but no interface appeared yet.")
+        if h.rfkill:
+            h.messages.append(f"A radio is blocked ({', '.join(h.rfkill)}) — "
+                              "run:  sudo rfkill unblock all")
         h.messages.append("Unplug and re-plug the adapter, then run:  airdriver scan")
         h.messages.append("If it still doesn't show, try a different USB port "
                           "(use USB 2.0 / a powered hub for high-power cards like the AWUS1900).")
@@ -212,9 +245,9 @@ def check(chip: Chipset, info: SystemInfo, usb_id: Optional[str] = None) -> Heal
 
 
 def describe(h: Health) -> str:
-    icon = {"working": "✓", "demo": "·"}.get(h.verdict, "✗")
     head = {
         "working":     "WORKING — driver loaded and interface present.",
+        "rfkill":      "BLOCKED — interface exists but the radio is rfkill-blocked.",
         "no_iface":    "ALMOST — module loaded, but no interface yet.",
         "secure_boot": "BLOCKED — built but Secure Boot won't load it.",
         "not_loaded":  "NOT LOADED — built but the module isn't active.",
@@ -222,6 +255,7 @@ def describe(h: Health) -> str:
         "demo":        "Demo mode — run on Kali/Parrot to verify for real.",
         "unknown":     "Unknown state.",
     }.get(h.verdict, h.verdict)
+    icon = {"working": "✓", "demo": "·"}.get(h.verdict, "✗")
     lines = [f"{icon} {head}", ""]
     lines.append(f"  Chipset        {h.chipset}")
     lines.append(f"  Module built   {'yes' if h.module_built else 'no'}")
@@ -231,6 +265,8 @@ def describe(h: Health) -> str:
     lines.append(f"  Interface      {h.interface or 'none yet'}"
                  + (f"  (driver: {h.interface_driver})" if h.interface_driver else ""))
     lines.append(f"  Secure Boot    {h.secure_boot}")
+    if h.rfkill:
+        lines.append(f"  RF-kill        {', '.join(h.rfkill)}")
     if h.messages:
         lines.append("")
         lines += [f"  {m}" if m else "" for m in h.messages]

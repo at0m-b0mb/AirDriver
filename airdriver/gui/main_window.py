@@ -98,6 +98,19 @@ class VerifyWorker(QObject):
         self.done.emit(verify.check(self.chip, self.info, usb_id=self.usb_id))
 
 
+class DiagnoseWorker(QObject):
+    """Gathers the full diagnostic snapshot (rfkill/dmesg/dkms…) off the UI thread."""
+    done = Signal(str)
+
+    def __init__(self, db: ChipsetDB):
+        super().__init__()
+        self.db = db
+
+    def run(self):
+        from ..core import diagnose
+        self.done.emit(diagnose.snapshot(self.db))
+
+
 # --------------------------------------------------------------------------- #
 # Small widgets                                                               #
 # --------------------------------------------------------------------------- #
@@ -254,6 +267,10 @@ class MainWindow(QMainWindow):
         lay.addSpacing(6)
         lay.addLayout(col)
         lay.addStretch(1)
+        self.btn_diag = QPushButton("🩺 Diagnose")
+        self.btn_diag.setToolTip("Collect a full diagnostic snapshot (copied to clipboard) to share when stuck")
+        self.btn_diag.clicked.connect(self.run_diagnose)
+        lay.addWidget(self.btn_diag)
         self.btn_help = QPushButton("?  Help")
         self.btn_help.setToolTip("Quick start, troubleshooting, and the project page")
         self.btn_help.clicked.connect(self.show_help)
@@ -661,6 +678,26 @@ class MainWindow(QMainWindow):
         worker = InstallWorker(plan, self.sysinfo, False)
         worker.line.connect(self.log_line)
         self._start_worker(worker, self._on_install_done)
+
+    # ---- diagnose ----------------------------------------------------------
+    def run_diagnose(self):
+        if self._installing or self._scanning:
+            return
+        self.log.clear()
+        self.log_line("Collecting diagnostic snapshot (rfkill, dmesg, dkms…)…")
+        self.btn_diag.setEnabled(False)
+        self.btn_diag.setText("Collecting…")
+        self._start_worker(DiagnoseWorker(self.db), self._on_diagnose_done)
+
+    def _on_diagnose_done(self, text: str):
+        self.btn_diag.setEnabled(True)
+        self.btn_diag.setText("🩺 Diagnose")
+        self.log.setPlainText(text)
+        QApplication.clipboard().setText(text)
+        QMessageBox.information(
+            self, "Diagnostic ready",
+            "A full diagnostic snapshot is shown in the log and copied to your "
+            "clipboard.\n\nPaste it wherever you're asking for help.")
 
     def _set_busy(self, busy: bool):
         for b in (self.btn_install, self.btn_plan, self.btn_rescan,

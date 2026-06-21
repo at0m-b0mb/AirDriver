@@ -249,9 +249,8 @@ def build_plan(adapter: Adapter, sysinfo: SystemInfo, *,
                     f"This chip needs firmware '{kn.firmware}' ({fw_pkg}); no internet "
                     "to fetch it. If WiFi still fails, install that package when online.")
         _append_conflict_and_load(plan, chip, kn.module)
+        _append_bringup(plan)
         plan.needs_reboot = False
-        steps.append(Step(title="Verify the interface appears",
-                          shell="ip link | grep -E 'wl|mon' || iw dev || true", optional=True))
         return plan
 
     if option is None:
@@ -272,6 +271,12 @@ def build_plan(adapter: Adapter, sysinfo: SystemInfo, *,
                 shell="sudo apt-get install -y linux-headers-$(uname -r) || "
                       "sudo apt-get install -y linux-headers-amd64",
                 privileged=True))
+            plan.warnings.append(
+                f"Kernel headers for your running kernel ({sysinfo.kernel_release}) are "
+                "missing. If the header install above can't find an exact match, your "
+                "running kernel is older than the installed one — run "
+                "'sudo apt update && sudo apt full-upgrade', REBOOT, then install again "
+                "so DKMS builds against the kernel you're actually running.")
         steps.append(Step(
             title="Install build prerequisites (dkms, build-essential, git, bc, libelf)",
             shell="sudo apt-get install -y dkms build-essential git bc libelf-dev",
@@ -287,11 +292,35 @@ def build_plan(adapter: Adapter, sysinfo: SystemInfo, *,
         src = offline_source_dir(option)
         steps.append(_dkms_step_offline(option, src))
 
-    # --- Conflicts, depmod, load, verify -----------------------------------
+    # --- Conflicts, depmod, load, bring-up ---------------------------------
     _append_conflict_and_load(plan, chip, option.module or (chip.kernel_native.module if chip.kernel_native else ""))
-    steps.append(Step(title="Verify the interface appears",
-                      shell="ip link | grep -E 'wl|mon' || iw dev || true", optional=True))
+    _append_bringup(plan)
     return plan
+
+
+def _append_bringup(plan: InstallPlan) -> None:
+    """Steps that turn a *loaded* driver into a *working* adapter. These are the
+    bits people forget after a build succeeds: the radio is soft-blocked by
+    rfkill, the interface is administratively down, or NetworkManager hasn't
+    noticed it yet — any of which looks like 'the driver doesn't work'."""
+    plan.steps.append(Step(
+        title="Unblock wireless radios (rfkill)",
+        shell="sudo rfkill unblock all 2>/dev/null || true",
+        privileged=True, optional=True))
+    plan.steps.append(Step(
+        title="Bring up the wireless interface(s)",
+        shell=("found=0; for d in /sys/class/net/*/wireless; do "
+               "[ -e \"$d\" ] || continue; i=$(basename \"$(dirname \"$d\")\"); "
+               "echo \"[airdriver] ip link set $i up\"; "
+               "sudo ip link set \"$i\" up 2>/dev/null && found=1; done; "
+               "[ \"$found\" = 1 ] || echo \"[airdriver] no wireless interface yet — "
+               "re-plug the adapter and run: airdriver scan\"; "
+               "ip -brief link show 2>/dev/null | grep -iE 'wl|mon' || true"),
+        privileged=True, optional=True))
+    plan.steps.append(Step(
+        title="Let NetworkManager manage the adapter",
+        shell="sudo nmcli radio wifi on 2>/dev/null || true",
+        privileged=True, optional=True))
 
 
 def _append_conflict_and_load(plan: InstallPlan, chip: Chipset, module: str) -> None:
