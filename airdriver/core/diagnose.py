@@ -19,7 +19,7 @@ from .chipset_db import ChipsetDB
 
 def _run(cmd: list[str], timeout: int = 12) -> str:
     is_root = hasattr(os, "geteuid") and os.geteuid() == 0
-    if not is_root and cmd and cmd[0] in ("dmesg", "rfkill"):
+    if not is_root and cmd and cmd[0] == "dmesg":   # dmesg is often root-only; rfkill isn't
         import shutil
         if shutil.which("sudo"):
             cmd = ["sudo", "-n", *cmd]

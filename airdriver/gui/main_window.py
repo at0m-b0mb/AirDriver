@@ -679,6 +679,29 @@ class MainWindow(QMainWindow):
         worker.line.connect(self.log_line)
         self._start_worker(worker, self._on_install_done)
 
+    # ---- diagnostics -------------------------------------------------------
+    def run_diagnose(self):
+        if self._installing:
+            return
+        self.btn_diag.setEnabled(False)
+        self.btn_diag.setText("Collecting…")
+        self.log.clear()
+        self.log_line("Collecting diagnostic snapshot (rfkill · dmesg · dkms · interfaces)…")
+        self._start_worker(DiagnoseWorker(self.db), self._on_diagnose_done)
+
+    def _on_diagnose_done(self, text: str):
+        self.btn_diag.setEnabled(True)
+        self.btn_diag.setText("🩺 Diagnose")
+        self.log.setPlainText(text)
+        QApplication.clipboard().setText(text)
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Information)
+        box.setWindowTitle("Diagnostic ready")
+        box.setText("Diagnostic snapshot copied to your clipboard.")
+        box.setInformativeText("It's also shown in the log on the right. Paste it into a "
+                               "GitHub issue / forum / chat when asking for help.")
+        box.exec()
+
     # ---- diagnose ----------------------------------------------------------
     def run_diagnose(self):
         if self._installing or self._scanning:
