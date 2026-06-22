@@ -5,17 +5,22 @@ app can be re-skinned in one place.
 """
 
 # Palette -------------------------------------------------------------------- #
-BG = "#0d1117"          # window background
-PANEL = "#161b22"       # cards / panels
-PANEL_HI = "#1c2230"    # hovered / selected panel
+BG = "#0b0f16"          # window background (a touch deeper for contrast)
+BG_LOG = "#070a10"      # console / log surface
+PANEL = "#151b24"       # cards / panels
+PANEL_HI = "#1c2331"    # hovered / selected panel
+PANEL_HOVER = "#222b3b"  # button hover
 BORDER = "#283042"
+BORDER_HI = "#37425a"   # brighter divider / hover border
 TEXT = "#e6edf3"
 DIM = "#8b949e"
 ACCENT = "#2ee6a6"      # primary (teal-green)
 ACCENT_DK = "#1f9e72"
+ACCENT_SOFT = "rgba(46, 230, 166, 0.12)"   # translucent accent wash
 CYAN = "#38bdf8"
 WARN = "#f5a623"
 DANGER = "#ff6b6b"
+DANGER_SOFT = "rgba(255, 107, 107, 0.12)"
 GOOD = "#3fb950"
 
 MONO = "Menlo, 'DejaVu Sans Mono', 'Cascadia Mono', Consolas, monospace"
@@ -29,78 +34,120 @@ def stylesheet() -> str:
         color: {TEXT};
         font-family: {SANS};
         font-size: 13px;
-    }}
-    QLabel#H1 {{ font-size: 22px; font-weight: 700; }}
-    QLabel#H2 {{ font-size: 15px; font-weight: 600; }}
-    QLabel#Dim {{ color: {DIM}; }}
-    QLabel#Pill {{
-        background: {PANEL_HI}; color: {DIM};
-        border: 1px solid {BORDER}; border-radius: 9px;
-        padding: 2px 8px; font-size: 11px;
+        selection-background-color: {ACCENT_DK};
+        selection-color: {TEXT};
     }}
 
+    /* ---- typography & label roles ------------------------------------ */
+    QLabel#H1 {{ font-size: 22px; font-weight: 800; }}
+    QLabel#H2 {{ font-size: 15px; font-weight: 600; }}
+    QLabel#Dim {{ color: {DIM}; }}
+    QLabel#Link {{ color: {CYAN}; }}
+    QLabel#Tag {{ color: {ACCENT}; font-weight: 600; }}
+    QLabel#Good {{ color: {GOOD}; font-weight: 600; }}
+    QLabel#Warn {{ color: {WARN}; font-weight: 600; }}
+    QLabel#Danger {{ color: {DANGER}; font-weight: 600; }}
+
+    QLabel#Pill {{
+        background: {PANEL_HI}; color: {DIM};
+        border: 1px solid {BORDER}; border-radius: 10px;
+        padding: 3px 10px; font-size: 11px; font-weight: 600;
+    }}
+
+    /* ---- cards & panels ---------------------------------------------- */
     QFrame#Card {{
-        background: {PANEL}; border: 1px solid {BORDER}; border-radius: 12px;
+        background: {PANEL}; border: 1px solid {BORDER}; border-radius: 13px;
     }}
+    QFrame#Card:hover {{ border: 1px solid {BORDER_HI}; background: {PANEL_HI}; }}
     QFrame#Card[selected="true"] {{
-        background: {PANEL_HI}; border: 1px solid {ACCENT};
+        background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+            stop:0 {PANEL_HI}, stop:1 {PANEL});
+        border: 1px solid {ACCENT};
     }}
+
     QFrame#Header {{
         background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-            stop:0 {PANEL_HI}, stop:1 {PANEL});
+            stop:0 {PANEL_HI}, stop:0.6 {PANEL}, stop:1 {BG});
         border-bottom: 1px solid {BORDER};
     }}
     QFrame#StatusStrip {{
-        background: {PANEL}; border: 1px solid {BORDER}; border-radius: 10px;
+        background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+            stop:0 {PANEL_HI}, stop:1 {PANEL});
+        border: 1px solid {BORDER}; border-radius: 11px;
     }}
     QFrame#Footer {{ background: {BG}; border-top: 1px solid {BORDER}; }}
-    QLabel#Link {{ color: {CYAN}; }}
-    QLabel#Tag {{ color: {ACCENT}; font-weight: 600; }}
 
+    /* ---- buttons ----------------------------------------------------- */
     QPushButton {{
         background: {PANEL_HI}; color: {TEXT};
-        border: 1px solid {BORDER}; border-radius: 8px;
+        border: 1px solid {BORDER}; border-radius: 9px;
         padding: 7px 14px; font-weight: 600;
     }}
-    QPushButton:hover {{ border: 1px solid {ACCENT}; }}
-    QPushButton:disabled {{ color: {DIM}; border: 1px solid {BORDER}; }}
+    QPushButton:hover {{ background: {PANEL_HOVER}; border: 1px solid {ACCENT}; }}
+    QPushButton:pressed {{ background: {PANEL}; }}
+    QPushButton:disabled {{ background: {PANEL}; color: {DIM}; border: 1px solid {BORDER}; }}
+
     QPushButton#Primary {{
-        background: {ACCENT}; color: #04130d; border: none;
+        background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+            stop:0 {ACCENT}, stop:1 {ACCENT_DK});
+        color: #04130d; border: none; border-radius: 9px;
+        padding: 8px 18px; font-weight: 700;
     }}
-    QPushButton#Primary:hover {{ background: {ACCENT_DK}; color: {TEXT}; }}
+    QPushButton#Primary:hover {{ background: {ACCENT}; }}
+    QPushButton#Primary:pressed {{ background: {ACCENT_DK}; }}
     QPushButton#Primary:disabled {{ background: {BORDER}; color: {DIM}; }}
-    QPushButton#Ghost {{ background: transparent; }}
 
-    QPlainTextEdit, QTextEdit {{
-        background: #0a0e14; color: {TEXT};
-        border: 1px solid {BORDER}; border-radius: 10px;
-        font-family: {MONO}; font-size: 12px;
-        padding: 8px;
+    QPushButton#Ghost {{
+        background: transparent; color: {DIM}; border: 1px solid {BORDER};
+    }}
+    QPushButton#Ghost:hover {{
+        background: {DANGER_SOFT}; color: {DANGER}; border: 1px solid {DANGER};
     }}
 
-    QScrollArea {{ border: none; }}
-    QScrollBar:vertical {{ background: {BG}; width: 10px; margin: 0; }}
-    QScrollBar::handle:vertical {{ background: {BORDER}; border-radius: 5px; min-height: 30px; }}
-    QScrollBar::handle:vertical:hover {{ background: {DIM}; }}
-    QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; }}
+    /* ---- console / log ----------------------------------------------- */
+    QPlainTextEdit, QTextEdit {{
+        background: {BG_LOG}; color: {TEXT};
+        border: 1px solid {BORDER}; border-radius: 11px;
+        font-family: {MONO}; font-size: 12px;
+        padding: 10px; selection-background-color: {ACCENT_DK};
+    }}
+    QTextBrowser {{
+        background: {PANEL}; border: 1px solid {BORDER}; border-radius: 11px; padding: 10px;
+    }}
 
+    /* ---- scrollbars -------------------------------------------------- */
+    QScrollArea {{ border: none; }}
+    QScrollBar:vertical {{ background: transparent; width: 11px; margin: 2px; }}
+    QScrollBar::handle:vertical {{ background: {BORDER}; border-radius: 5px; min-height: 32px; }}
+    QScrollBar::handle:vertical:hover {{ background: {BORDER_HI}; }}
+    QScrollBar:horizontal {{ background: transparent; height: 11px; margin: 2px; }}
+    QScrollBar::handle:horizontal {{ background: {BORDER}; border-radius: 5px; min-width: 32px; }}
+    QScrollBar::handle:horizontal:hover {{ background: {BORDER_HI}; }}
+    QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; width: 0; }}
+    QScrollBar::add-page, QScrollBar::sub-page {{ background: transparent; }}
+
+    /* ---- inputs ------------------------------------------------------ */
     QCheckBox {{ color: {TEXT}; spacing: 8px; }}
     QCheckBox::indicator {{
-        width: 16px; height: 16px; border-radius: 4px;
-        border: 1px solid {BORDER}; background: {BG};
+        width: 17px; height: 17px; border-radius: 5px;
+        border: 1px solid {BORDER_HI}; background: {BG};
     }}
+    QCheckBox::indicator:hover {{ border: 1px solid {ACCENT}; }}
     QCheckBox::indicator:checked {{ background: {ACCENT}; border: 1px solid {ACCENT}; }}
 
     QComboBox {{
         background: {PANEL_HI}; border: 1px solid {BORDER};
-        border-radius: 8px; padding: 6px 10px;
+        border-radius: 8px; padding: 6px 12px;
     }}
+    QComboBox:hover {{ border: 1px solid {ACCENT}; }}
+    QComboBox::drop-down {{ border: none; width: 22px; }}
     QComboBox QAbstractItemView {{
-        background: {PANEL}; border: 1px solid {BORDER};
-        selection-background-color: {ACCENT_DK};
+        background: {PANEL}; border: 1px solid {BORDER}; border-radius: 8px;
+        selection-background-color: {ACCENT_DK}; outline: none; padding: 4px;
     }}
+
     QToolTip {{
         background: {PANEL}; color: {TEXT}; border: 1px solid {ACCENT};
-        padding: 4px 8px; border-radius: 6px;
+        padding: 5px 9px; border-radius: 7px;
     }}
     """
