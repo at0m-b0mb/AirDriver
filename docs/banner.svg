@@ -1,103 +1,129 @@
 <svg width="1280" height="640" viewBox="0 0 1280 640" xmlns="http://www.w3.org/2000/svg">
   <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b0f16"/>
+      <stop offset="1" stop-color="#0d1422"/>
+    </linearGradient>
     <radialGradient id="glowAccent" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#2ee6a6" stop-opacity="0.20"/>
+      <stop offset="0%" stop-color="#2ee6a6" stop-opacity="0.18"/>
       <stop offset="100%" stop-color="#2ee6a6" stop-opacity="0"/>
     </radialGradient>
     <radialGradient id="glowCyan" cx="50%" cy="50%" r="50%">
       <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.16"/>
       <stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>
     </radialGradient>
+    <linearGradient id="wordmark" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#43f0b4"/>
+      <stop offset="1" stop-color="#1f9e72"/>
+    </linearGradient>
     <linearGradient id="hairline" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0%" stop-color="#2ee6a6" stop-opacity="0.9"/>
-      <stop offset="60%" stop-color="#283042" stop-opacity="0.9"/>
+      <stop offset="55%" stop-color="#283042" stop-opacity="0.8"/>
       <stop offset="100%" stop-color="#283042" stop-opacity="0"/>
     </linearGradient>
+    <radialGradient id="arcGrad" cx="1148" cy="384" r="360" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2ee6a6" stop-opacity="0.85"/>
+      <stop offset="0.55" stop-color="#2ee6a6" stop-opacity="0.30"/>
+      <stop offset="1" stop-color="#38bdf8" stop-opacity="0.04"/>
+    </radialGradient>
   </defs>
 
   <!-- background -->
-  <rect width="1280" height="640" fill="#0d1117"/>
-  <rect width="1280" height="640" fill="#0d1117"/>
-  <circle cx="120" cy="80" r="420" fill="url(#glowAccent)"/>
-  <circle cx="1200" cy="600" r="420" fill="url(#glowCyan)"/>
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <circle cx="150" cy="90" r="440" fill="url(#glowAccent)"/>
+  <circle cx="1180" cy="560" r="460" fill="url(#glowCyan)"/>
+  <rect x="14" y="14" width="1252" height="612" rx="24" fill="none" stroke="#283042" stroke-width="2"/>
 
-  <!-- subtle decorative concentric signal arcs, bottom-right -->
-  <g fill="none" stroke="#2ee6a6" stroke-opacity="0.07" stroke-width="14">
-    <circle cx="1240" cy="610" r="120"/>
-    <circle cx="1240" cy="610" r="210"/>
-    <circle cx="1240" cy="610" r="300"/>
-    <circle cx="1240" cy="610" r="390"/>
+  <!-- right hero: concentric 'transmitting signal' arcs -->
+  <g fill="none" stroke="url(#arcGrad)" stroke-linecap="round">
+    <path d="M 1028 384 A 120 120 0 0 1 1148 264" stroke-width="9"/>
+    <path d="M 968 384 A 180 180 0 0 1 1148 204"  stroke-width="9"/>
+    <path d="M 908 384 A 240 240 0 0 1 1148 144"  stroke-width="8"/>
+    <path d="M 848 384 A 300 300 0 0 1 1148 84"   stroke-width="8"/>
+    <path d="M 808 384 A 340 340 0 0 1 1148 44"   stroke-width="7" stroke-opacity="0.7"/>
   </g>
-
-  <!-- outer rounded frame -->
-  <rect x="14" y="14" width="1252" height="612" rx="22" fill="none" stroke="#283042" stroke-width="2"/>
-
-  <!-- icon badge: WiFi signal over a USB adapter -->
+  <!-- emitter: small USB adapter glyph -->
   <g>
-    <circle cx="150" cy="150" r="66" fill="#161b22" stroke="#2ee6a6" stroke-width="2"/>
-    <!-- usb adapter body -->
-    <rect x="139" y="170" width="22" height="34" rx="5" fill="#0d1117" stroke="#38bdf8" stroke-width="3"/>
-    <rect x="146" y="200" width="8" height="12" rx="2" fill="#38bdf8"/>
-    <!-- signal arcs -->
-    <g fill="none" stroke="#2ee6a6" stroke-width="5" stroke-linecap="round">
-      <path d="M 137 158 A 18 18 0 0 1 163 158"/>
-      <path d="M 126 146 A 34 34 0 0 1 174 146"/>
-      <path d="M 115 134 A 50 50 0 0 1 185 134"/>
+    <rect x="1134" y="380" width="34" height="56" rx="8" fill="#151b24" stroke="#38bdf8" stroke-width="3"/>
+    <rect x="1145" y="430" width="12" height="16" rx="3" fill="#38bdf8"/>
+    <circle cx="1148" cy="384" r="9" fill="#2ee6a6"/>
+    <circle cx="1148" cy="384" r="17" fill="none" stroke="#2ee6a6" stroke-opacity="0.4" stroke-width="2"/>
+  </g>
+  <!-- travelling packets -->
+  <circle cx="1058" cy="300" r="5" fill="#43f0b4"/>
+  <circle cx="996"  cy="262" r="4" fill="#38bdf8" fill-opacity="0.85"/>
+  <circle cx="930"  cy="232" r="4" fill="#2ee6a6" fill-opacity="0.6"/>
+
+  <!-- ============ left content column ============ -->
+  <!-- logo mark -->
+  <g transform="translate(96, 96)">
+    <rect x="0" y="0" width="92" height="92" rx="22" fill="#151b24" stroke="#283042" stroke-width="2"/>
+    <g fill="none" stroke="#2ee6a6" stroke-width="6" stroke-linecap="round">
+      <path d="M 30 60 A 22 22 0 0 1 62 60"/>
+      <path d="M 21 50 A 34 34 0 0 1 71 50"/>
+      <path d="M 12 40 A 46 46 0 0 1 80 40"/>
     </g>
-    <circle cx="150" cy="166" r="5" fill="#2ee6a6"/>
+    <circle cx="46" cy="62" r="6.5" fill="#2ee6a6"/>
   </g>
 
-  <!-- wordmark -->
-  <text x="246" y="150" font-family="Helvetica, Arial, sans-serif" font-size="92" font-weight="800">
-    <tspan fill="#2ee6a6">Air</tspan><tspan fill="#e6edf3">Driver</tspan>
+  <!-- wordmark + tagline -->
+  <text x="212" y="150" font-family="Helvetica, Arial, sans-serif" font-size="74" font-weight="800" letter-spacing="-1">
+    <tspan fill="url(#wordmark)">Air</tspan><tspan fill="#e6edf3">Driver</tspan>
   </text>
-  <text x="250" y="200" font-family="Helvetica, Arial, sans-serif" font-size="27" fill="#b9c2cc">
-    Auto-installs WiFi-adapter drivers on Kali Linux &amp; Parrot OS
+  <text x="214" y="190" font-family="Helvetica, Arial, sans-serif" font-size="25" fill="#aeb8c4">
+    WiFi-adapter driver auto-installer for Kali Linux &amp; Parrot OS
   </text>
 
   <!-- hairline -->
-  <rect x="250" y="226" width="900" height="2" fill="url(#hairline)"/>
+  <rect x="96" y="222" width="700" height="2" fill="url(#hairline)"/>
 
   <!-- terminal one-liner -->
-  <text x="250" y="294" font-family="Menlo, 'DejaVu Sans Mono', monospace" font-size="25">
-    <tspan fill="#2ee6a6">$ </tspan><tspan fill="#e6edf3">sudo airdriver</tspan><tspan fill="#6e7681">  &#8594;  </tspan><tspan fill="#3fb950">RTL8812AU detected, driver installed</tspan>
+  <text x="96" y="284" font-family="Menlo, 'DejaVu Sans Mono', monospace" font-size="23">
+    <tspan fill="#6e7681">$ </tspan><tspan fill="#e6edf3">sudo airdriver install</tspan><tspan fill="#6e7681">    </tspan><tspan fill="#3fb950">&#10003; RTL8814AU installed &amp; verified</tspan>
   </text>
 
   <!-- feature pills -->
-  <g font-family="Helvetica, Arial, sans-serif" font-size="21" font-weight="600">
+  <g font-family="Helvetica, Arial, sans-serif" font-size="20" font-weight="600">
     <g>
-      <rect x="200" y="338" width="172" height="46" rx="23" fill="#11221c" stroke="#2ee6a6" stroke-width="1.4"/>
-      <text x="286" y="368" fill="#c9f5e6" text-anchor="middle">Auto-detect</text>
+      <rect x="96" y="318" width="158" height="44" rx="22" fill="#11221c" stroke="#2ee6a6" stroke-width="1.4"/>
+      <text x="175" y="346" fill="#c9f5e6" text-anchor="middle">Auto-detect</text>
     </g>
     <g>
-      <rect x="386" y="338" width="186" height="46" rx="23" fill="#11221c" stroke="#2ee6a6" stroke-width="1.4"/>
-      <text x="479" y="368" fill="#c9f5e6" text-anchor="middle">Monitor mode</text>
+      <rect x="266" y="318" width="172" height="44" rx="22" fill="#11221c" stroke="#2ee6a6" stroke-width="1.4"/>
+      <text x="352" y="346" fill="#c9f5e6" text-anchor="middle">Monitor mode</text>
     </g>
     <g>
-      <rect x="586" y="338" width="202" height="46" rx="23" fill="#11221c" stroke="#2ee6a6" stroke-width="1.4"/>
-      <text x="687" y="368" fill="#c9f5e6" text-anchor="middle">Packet injection</text>
+      <rect x="450" y="318" width="188" height="44" rx="22" fill="#11221c" stroke="#2ee6a6" stroke-width="1.4"/>
+      <text x="544" y="346" fill="#c9f5e6" text-anchor="middle">Packet injection</text>
     </g>
     <g>
-      <rect x="802" y="338" width="198" height="46" rx="23" fill="#0e1c26" stroke="#38bdf8" stroke-width="1.4"/>
-      <text x="901" y="368" fill="#bfe6fb" text-anchor="middle">Online + Offline</text>
+      <rect x="96" y="374" width="186" height="44" rx="22" fill="#0e1c26" stroke="#38bdf8" stroke-width="1.4"/>
+      <text x="189" y="402" fill="#bfe6fb" text-anchor="middle">Online + Offline</text>
     </g>
     <g>
-      <rect x="1014" y="338" width="142" height="46" rx="23" fill="#0e1c26" stroke="#38bdf8" stroke-width="1.4"/>
-      <text x="1085" y="368" fill="#bfe6fb" text-anchor="middle">GUI + CLI</text>
+      <rect x="294" y="374" width="190" height="44" rx="22" fill="#0e1c26" stroke="#38bdf8" stroke-width="1.4"/>
+      <text x="389" y="402" fill="#bfe6fb" text-anchor="middle">Verified installs</text>
+    </g>
+    <g>
+      <rect x="496" y="374" width="124" height="44" rx="22" fill="#0e1c26" stroke="#38bdf8" stroke-width="1.4"/>
+      <text x="558" y="402" fill="#bfe6fb" text-anchor="middle">GUI + CLI</text>
     </g>
   </g>
 
   <!-- chipset families -->
-  <text x="250" y="452" font-family="Menlo, 'DejaVu Sans Mono', monospace" font-size="21" fill="#8b949e">
-    18 chipset families  ·  Realtek · Atheros · MediaTek  ·  in-kernel / apt / DKMS / offline
+  <text x="96" y="466" font-family="Menlo, 'DejaVu Sans Mono', monospace" font-size="20" fill="#8b949e">
+    <tspan fill="#cdd5df">28 chipset families</tspan> &#183; 160+ IDs &#183; Realtek &#183; Atheros &#183; MediaTek &#183; Intel
+  </text>
+  <text x="96" y="498" font-family="Menlo, 'DejaVu Sans Mono', monospace" font-size="20" fill="#8b949e">
+    driver path: in-kernel &#183; apt &#183; DKMS &#183; offline bundle
   </text>
 
   <!-- footer -->
-  <rect x="250" y="500" width="780" height="1.5" fill="#283042"/>
-  <text x="250" y="548" font-family="Menlo, 'DejaVu Sans Mono', monospace" font-size="20" fill="#6e7681">
-    MIT · PySide6 GUI · pure-stdlib core + CLI
+  <rect x="96" y="544" width="1088" height="1.5" fill="#283042"/>
+  <text x="96" y="586" font-family="Menlo, 'DejaVu Sans Mono', monospace" font-size="19" fill="#6e7681">
+    MIT &#183; PySide6 GUI &#183; pure-stdlib core + CLI &#183; v0.2.0
   </text>
-  <text x="1150" y="548" font-family="Menlo, 'DejaVu Sans Mono', monospace" font-size="20" fill="#7d8794" text-anchor="end">
+  <text x="1184" y="586" font-family="Menlo, 'DejaVu Sans Mono', monospace" font-size="19" fill="#7d8794" text-anchor="end">
     github.com/at0m-b0mb/AirDriver
   </text>
 </svg>
