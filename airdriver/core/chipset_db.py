@@ -7,6 +7,7 @@ and to an ordered list of ways to get a working driver for it.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from importlib import resources
 from pathlib import Path
@@ -119,6 +120,60 @@ class ChipsetDB:
 
     def __len__(self) -> int:
         return len(self._chipsets)
+
+    def usb_id_count(self) -> int:
+        return sum(len(c.usb_ids) for c in self._chipsets)
+
+    # ---- integrity ---------------------------------------------------------
+    def problems(self) -> list[str]:
+        """Self-consistency check for the database. Returns a list of human
+        readable problems (empty == healthy). Used by ``airdriver db --check``
+        and the test-suite so a mistake like the same ``vid:pid`` landing in two
+        chipsets (which silently mis-identifies hardware) can never ship again.
+        """
+        valid_methods = {"kernel_native", "apt", "dkms_git", "offline"}
+        _id_re = re.compile(r"^[0-9a-f]{4}:[0-9a-f]{4}$")
+        out: list[str] = []
+
+        # Unique chipset ids.
+        seen_cid: dict[str, int] = {}
+        for c in self._chipsets:
+            seen_cid[c.id] = seen_cid.get(c.id, 0) + 1
+        for cid, n in seen_cid.items():
+            if n > 1:
+                out.append(f"duplicate chipset id '{cid}' ({n} entries)")
+
+        # Every usb_id must be unique across the whole file, else lookups are
+        # ambiguous and the last-loaded chipset silently wins.
+        owner: dict[str, str] = {}
+        for c in self._chipsets:
+            for uid in c.usb_ids:
+                if not _id_re.match(uid):
+                    out.append(f"{c.id}: malformed usb_id '{uid}' (want lowercase vid:pid)")
+                if uid in owner and owner[uid] != c.id:
+                    out.append(f"usb_id '{uid}' claimed by both '{owner[uid]}' and '{c.id}'")
+                owner[uid] = c.id
+
+        # Driver options must be sane and priorities unique within a chipset.
+        for c in self._chipsets:
+            if not c.drivers:
+                out.append(f"{c.id}: no driver options")
+            prios: dict[int, int] = {}
+            for d in c.drivers:
+                if d.method not in valid_methods:
+                    out.append(f"{c.id}: unknown driver method '{d.method}'")
+                if d.method == "apt" and not d.package:
+                    out.append(f"{c.id}: apt driver without a package name")
+                if d.method == "dkms_git" and not d.repo:
+                    out.append(f"{c.id}: dkms_git driver without a repo")
+                if d.method == "offline" and not d.path:
+                    out.append(f"{c.id}: offline driver without a path")
+                prios[d.priority] = prios.get(d.priority, 0) + 1
+            for p, n in prios.items():
+                if n > 1:
+                    out.append(f"{c.id}: {n} driver options share priority {p}")
+
+        return out
 
     # ---- loading -----------------------------------------------------------
     @classmethod

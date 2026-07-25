@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "updated": "2026-06-19",
-  "_about": "AirDriver chipset database. Maps USB/PCI VID:PID -> chipset -> driver install strategy. 'usb_ids' are lowercase 'vid:pid' (works for PCI ids too). 'kernel_native' tells AirDriver when an in-kernel driver already exists so it can SKIP a pointless DKMS build. 'drivers' are tried in 'priority' order (1 = first). 'monitor_mode'/'injection' are honest capability flags for pentest use; some chips connect fine but can't inject. Extend freely: add entries or usb_ids and AirDriver picks them up on next scan. PRs welcome at https://github.com/at0m-b0mb/AirDriver.",
+  "updated": "2026-07-25",
+  "_about": "AirDriver chipset database. Maps USB/PCI VID:PID -> chipset -> driver install strategy. 'usb_ids' are lowercase 'vid:pid' (works for PCI ids too). 'kernel_native' tells AirDriver when an in-kernel driver already exists so it can SKIP a pointless DKMS build. 'drivers' are tried in 'priority' order (1 = first). 'monitor_mode'/'injection' are honest capability flags for pentest use; some chips connect fine but can't inject. Every usb_id is unique across the whole file (enforced by tests/test_chipset_db.py). Extend freely: add entries or usb_ids and AirDriver picks them up on next scan. PRs welcome at https://github.com/at0m-b0mb/AirDriver.",
   "injection_quality_scale": ["unknown", "poor", "fair", "good", "excellent"],
   "chipsets": [
     {
@@ -14,8 +14,8 @@
       "injection": true,
       "injection_quality": "good",
       "notes": "The classic ALFA AWUS036ACH chipset. Monitor mode can get unstable after long sessions on some firmware revisions; morrownr driver is more stable than the kernel rtw88 path for injection work.",
-      "adapters": ["ALFA AWUS036ACH", "ALFA AWUS036AC", "TP-Link Archer T4U v1", "Netgear A6210"],
-      "usb_ids": ["0bda:8812", "0bda:881a", "0bda:881b", "0bda:881c", "0bda:a811", "2357:0103", "2357:0106", "2357:0108", "2357:0109", "0846:9052", "0e66:0022", "2001:3314", "2001:3315", "7392:a812", "7392:a811", "7392:a822", "20f4:805b", "0df6:0074", "13b1:003f", "0411:0242", "0411:029b", "04bb:0952", "056e:4007"],
+      "adapters": ["ALFA AWUS036ACH", "ALFA AWUS036AC", "TP-Link Archer T4U v1", "Netgear A6210", "D-Link DWA-172", "EnGenius EUB1200AC"],
+      "usb_ids": ["0bda:8812", "0bda:881a", "0bda:881b", "0bda:881c", "0409:0408", "0411:025d", "04bb:0952", "050d:1106", "050d:1109", "0586:3426", "0789:016e", "07b8:8812", "0846:9051", "0b05:17d2", "0df6:0074", "0e66:0022", "1058:0632", "13b1:003f", "148f:9097", "1740:0100", "2001:330e", "2001:3313", "2001:3315", "2001:3316", "2019:ab30", "20f4:805b", "2357:0101", "2357:0103", "2357:0106", "2357:0108", "2357:0109", "2357:010d", "2357:010e", "2357:010f", "2357:0122", "2604:0012", "7392:a822"],
       "kernel_native": {"module": "rtw88_8812au", "min_kernel": "6.14", "recommended_kernel": "6.16"},
       "drivers": [
         {"method": "apt", "package": "realtek-rtl88xxau-dkms", "distro": ["kali", "parrot", "debian", "ubuntu"], "priority": 1},
@@ -34,8 +34,8 @@
       "injection": true,
       "injection_quality": "fair",
       "notes": "Smaller/cheaper AC600 sibling of the 8812au. Good for travel; lower TX power. 8811AU has no active-monitor VIF on the in-kernel path.",
-      "adapters": ["ALFA AWUS036ACS", "TP-Link Archer T2U v1", "Edimax EW-7811UTC"],
-      "usb_ids": ["0bda:0811", "0bda:0820", "0bda:0821", "0bda:8822", "0bda:a811", "2357:011e", "2357:011f", "2357:0120", "7392:a822", "0e66:0023"],
+      "adapters": ["ALFA AWUS036ACS", "TP-Link Archer T2U v1", "Edimax EW-7811UTC", "Netgear A6100", "D-Link DWA-171"],
+      "usb_ids": ["0bda:0811", "0bda:0820", "0bda:0821", "0bda:0823", "0bda:8822", "0bda:a811", "0411:0242", "0411:029b", "04bb:0953", "056e:4007", "056e:400e", "056e:400f", "0846:9052", "0e66:0023", "2001:3314", "2001:3318", "2019:ab32", "20f4:804b", "2357:011e", "2357:011f", "2357:0120", "3823:6249", "7392:a811", "7392:a812", "7392:a813"],
       "kernel_native": {"module": "rtw88_8821au", "min_kernel": "6.14", "recommended_kernel": "6.16"},
       "drivers": [
         {"method": "apt", "package": "realtek-rtl88xxau-dkms", "distro": ["kali", "parrot", "debian", "ubuntu"], "priority": 1},
@@ -74,8 +74,8 @@
       "injection": true,
       "injection_quality": "fair",
       "notes": "Common in tiny nano adapters (TP-Link Archer T2U Nano/Plus). No mainline in-kernel driver yet — DKMS required.",
-      "adapters": ["TP-Link Archer T2U Nano", "TP-Link Archer T2U Plus", "TP-Link Archer T3U", "ALFA AWUS036ACU"],
-      "usb_ids": ["0bda:c811", "0bda:c820", "0bda:c821", "0bda:c82a", "0bda:c82b", "0bda:c830", "0bda:b820", "2357:0122", "2357:012d", "2357:0138", "2001:331e", "7392:c822"],
+      "adapters": ["TP-Link Archer T2U Nano", "TP-Link Archer T2U Plus", "ALFA AWUS036ACU", "D-Link DWA-171 rev B", "Edimax EW-7811UAC"],
+      "usb_ids": ["0bda:c811", "0bda:c820", "0bda:c821", "0bda:c82a", "0bda:c82b", "0bda:c830", "0bda:c80c", "0bda:b820", "0bda:b82b", "0bda:8811", "0bda:8731", "0bda:2006", "2001:331d", "7392:c811", "7392:d811"],
       "kernel_native": null,
       "drivers": [
         {"method": "apt", "package": "realtek-rtl8821cu-dkms", "distro": ["kali", "parrot"], "priority": 1},
@@ -355,8 +355,8 @@
       "injection": true,
       "injection_quality": "fair",
       "notes": "Common in mid-range AC1200 dongles (TP-Link Archer T3U/T4U v3). The morrownr 88x2bu driver gives the most reliable monitor/injection; the Kali apt package is the easiest path.",
-      "adapters": ["TP-Link Archer T3U", "TP-Link Archer T4U v3", "Comfast CF-812AC", "ASUS USB-AC53 Nano"],
-      "usb_ids": ["0bda:b812", "0bda:b82c", "2357:0125", "2357:012e", "0b05:1841", "0b05:184c", "7392:c811", "13b1:0043"],
+      "adapters": ["TP-Link Archer T3U", "TP-Link Archer T4U v3", "Comfast CF-812AC", "ASUS USB-AC53 Nano", "D-Link DWA-182 D1", "Linksys WUSB3600 v2", "Netgear A6150", "TRENDnet TEW-808UBM", "Mercusys MA30H"],
+      "usb_ids": ["0bda:b812", "0bda:b81a", "0bda:b82c", "0bda:2102", "04ca:8602", "056e:4011", "0846:9055", "0b05:1841", "0b05:184c", "0b05:1870", "0b05:1874", "0b05:19aa", "0e66:0025", "13b1:0043", "13b1:0045", "2001:331c", "2001:331e", "2001:331f", "20f4:805a", "20f4:808a", "2357:0115", "2357:0116", "2357:0117", "2357:0125", "2357:012d", "2357:012e", "2357:0138", "2c4e:0107", "7392:b822", "7392:c822", "7392:d822", "7392:e822", "7392:f822"],
       "kernel_native": null,
       "drivers": [
         {"method": "apt", "package": "realtek-rtl88x2bu-dkms", "distro": ["kali", "parrot", "debian", "ubuntu"], "priority": 1},
@@ -400,6 +400,25 @@
       "drivers": [
         {"method": "dkms_git", "repo": "https://github.com/lwfinger/rtl8723bu", "module": "8723bu", "priority": 1},
         {"method": "offline", "path": "drivers/rtl8723bu", "module": "8723bu", "priority": 2}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "rtl8710bu",
+      "name": "Realtek RTL8710BU / RTL8188GU",
+      "vendor": "Realtek",
+      "wifi": "WiFi 4 (802.11n)",
+      "band": "Single-band 2.4 GHz",
+      "monitor_mode": true,
+      "injection": false,
+      "injection_quality": "poor",
+      "notes": "Newer budget 2.4 GHz chip (aka RTL8188GU) in cheap nano dongles. Many ship in USB CD-ROM/flip-storage mode (shown as 0bda:1a2b) and need usb-modeswitch before the Wi-Fi device (0bda:b711) appears. In-kernel support is immature; the lwfinger DKMS driver (module 8188gu) gives connectivity and monitor-mode sniffing, but injection is unreliable — connect-only, not attack-grade.",
+      "adapters": ["Tenda W311MI", "Generic RTL8710BU / RTL8188GU nano dongles"],
+      "usb_ids": ["0bda:b711"],
+      "kernel_native": null,
+      "drivers": [
+        {"method": "dkms_git", "repo": "https://github.com/lwfinger/rtl8188gu", "module": "8188gu", "priority": 1},
+        {"method": "offline", "path": "drivers/rtl8188gu", "module": "8188gu", "priority": 2}
       ],
       "blacklist": []
     },

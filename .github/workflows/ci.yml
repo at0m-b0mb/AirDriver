@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  core:
+    name: core + CLI (stdlib only, py${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.9", "3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Validate the chipset database
+        run: python -m airdriver db --check
+      - name: Run the test suite (no dependencies)
+        run: python -m unittest discover -s tests -v
+
+  gui:
+    name: GUI import smoke (PySide6, offscreen)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install with the GUI extra
+        run: pip install -e ".[gui]"
+      - name: Import + build the window headlessly
+        env:
+          QT_QPA_PLATFORM: offscreen
+          AIRDRIVER_FORCE_GUI: "1"
+        run: |
+          python - <<'PY'
+          from PySide6.QtWidgets import QApplication
+          from PySide6.QtCore import QElapsedTimer
+          from airdriver.gui import theme as T
+          from airdriver.gui.main_window import MainWindow
+          app = QApplication([])
+          app.setStyleSheet(T.stylesheet())
+          w = MainWindow()          # exercises the full layout + workers
+          w.show()
+          t = QElapsedTimer(); t.start()
+          while (w._scanning or w._installing) and t.elapsed() < 5000:
+              app.processEvents()   # let the scan worker finish, then tear down cleanly
+          w.grab()
+          w.close()
+          assert len(w.db) >= 29, "chipset database shrank unexpectedly"
+          print("GUI OK — families:", len(w.db), "ids:", w.db.usb_id_count())
+          PY

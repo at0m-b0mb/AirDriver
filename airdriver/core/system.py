@@ -129,9 +129,8 @@ def _headers_present(kernel_release: str) -> tuple[bool, str]:
 
 def _check_internet(host: str = "1.1.1.1", port: int = 53, timeout: float = 2.0) -> bool:
     try:
-        socket.setdefaulttimeout(timeout)
-        socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect((host, port))
-        return True
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
     except OSError:
         return False
 

@@ -215,6 +215,62 @@ def _dkms_step_offline(option: DriverOption, src: Path) -> Step:
                 shell=_build_script(fetch), privileged=True)
 
 
+# The build prerequisites, inlined so the apt→source fallback can install them
+# on the fly *only if* it actually has to compile (keeps the fast path fast).
+_BUILD_PREREQS = (
+    'echo "[airdriver] installing build prerequisites (dkms, headers, toolchain)"; '
+    'sudo apt-get install -y dkms build-essential git bc libelf-dev '
+    'linux-headers-"$(uname -r)" 2>/dev/null || '
+    'sudo apt-get install -y dkms build-essential git bc libelf-dev linux-headers-amd64 || true'
+)
+
+
+def _source_fallback(chip: Chipset, sysinfo: SystemInfo) -> Optional[tuple[DriverOption, str]]:
+    """Pick the best *source* driver (git if online, else a present offline
+    bundle) to fall back to when an apt package can't be installed. Returns
+    ``(option, fetch_snippet)`` or ``None`` when no source build is possible."""
+    opts = chip.best_drivers()
+    if sysinfo.has_internet:
+        git = next((o for o in opts if o.method == "dkms_git"), None)
+        if git:
+            return git, (f'SRC="$(mktemp -d)/src"\n'
+                         f'git clone --depth=1 {shlex.quote(git.repo)} "$SRC"')
+    for o in opts:
+        if o.method == "offline":
+            src = offline_source_dir(o)
+            if src:
+                return o, (f'SRC="$(mktemp -d)/src"\nmkdir -p "$SRC"\n'
+                           f'cp -a {shlex.quote(str(src))}/. "$SRC"/')
+    return None
+
+
+def _apt_step(chip: Chipset, option: DriverOption, sysinfo: SystemInfo) -> Step:
+    """The apt install step. When a source driver is available we wrap it so a
+    missing/broken apt package transparently compiles the maintainer's driver
+    instead of failing the whole install — this is what makes "it just installs"
+    true even on kernels the apt DKMS package hasn't caught up with."""
+    pkg = option.package
+    fallback = _source_fallback(chip, sysinfo)
+    if not fallback:
+        return Step(title=f"Install apt package '{pkg}'",
+                    shell=f"sudo apt-get install -y {pkg}", privileged=True)
+    fb_opt, fetch = fallback
+    where = fb_opt.repo or fb_opt.path or "bundled source"
+    build = _build_script(fetch)
+    shell = (
+        f'if sudo apt-get install -y {shlex.quote(pkg)}; then\n'
+        f'  echo "[airdriver] installed {pkg} from apt"\n'
+        f'else\n'
+        f'  echo "[airdriver] apt package \'{pkg}\' is unavailable or failed — '
+        f'compiling the driver from {where} instead"\n'
+        f'  {_BUILD_PREREQS}\n'
+        f'  (\n{build}\n  )\n'
+        f'fi'
+    )
+    return Step(title=f"Install '{pkg}' via apt (auto-compiles from source if unavailable)",
+                shell=shell, privileged=True)
+
+
 def build_plan(adapter: Adapter, sysinfo: SystemInfo, *,
                force_dkms: bool = False, prefer_offline: bool = False) -> InstallPlan:
     chip = adapter.chipset
@@ -284,8 +340,7 @@ def build_plan(adapter: Adapter, sysinfo: SystemInfo, *,
 
     # --- The driver itself -------------------------------------------------
     if option.method == "apt":
-        steps.append(Step(title=f"Install apt package '{option.package}'",
-                          shell=f"sudo apt-get install -y {option.package}", privileged=True))
+        steps.append(_apt_step(chip, option, sysinfo))
     elif option.method == "dkms_git":
         steps.append(_dkms_step_git(option))
     elif option.method == "offline":
@@ -293,7 +348,12 @@ def build_plan(adapter: Adapter, sysinfo: SystemInfo, *,
         steps.append(_dkms_step_offline(option, src))
 
     # --- Conflicts, depmod, load, bring-up ---------------------------------
-    _append_conflict_and_load(plan, chip, option.module or (chip.kernel_native.module if chip.kernel_native else ""))
+    # The module to (re)load: the chosen option's, else any source driver's
+    # (apt DKMS packages often don't set option.module), else the in-kernel one.
+    load_module = (option.module
+                   or next((d.module for d in chip.drivers if d.module), None)
+                   or (chip.kernel_native.module if chip.kernel_native else ""))
+    _append_conflict_and_load(plan, chip, load_module)
     _append_bringup(plan)
     return plan
 

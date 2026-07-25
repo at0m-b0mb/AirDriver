@@ -23,6 +23,7 @@ REPOS=(
   "rtl8192eu|https://github.com/clnhub/rtl8192eu-linux|rtl8192eu-linux"
   "rtl8192cu|https://github.com/pvaret/rtl8192cu-fixes|rtl8192cu-fixes"
   "rtl8723bu|https://github.com/lwfinger/rtl8723bu|rtl8723bu"
+  "rtl8710bu|https://github.com/lwfinger/rtl8188gu|rtl8188gu"
   "rtl8821ce|https://github.com/tomaspinho/rtl8821ce|rtl8821ce"
   "rtl8852bu|https://github.com/morrownr/rtl8852bu-20250826|rtl8852bu-20250826"
   "rtl8852cu|https://github.com/morrownr/rtl8852cu-20251113|rtl8852cu-20251113"

@@ -2,13 +2,13 @@
 so it works over SSH on a headless box.
 
     airdriver                 # launch the GUI (or --no-gui to print scan)
-    airdriver scan            # list detected adapters
+    airdriver scan [--json]   # list detected adapters
     airdriver doctor          # system readiness check
     airdriver info <usb_id>   # database details for a chipset / id
     airdriver install [usb]   # plan + install a driver (--dry-run to preview)
-    airdriver monitor <iface> # toggle monitor mode / injection test
+    airdriver monitor status  # show each interface's mode (also: start/stop/test)
     airdriver report          # write a diagnostic report
-    airdriver db              # dump the chipset database
+    airdriver db [--check]    # dump / validate the chipset database (--json too)
 """
 
 from __future__ import annotations
@@ -55,8 +55,26 @@ def _cap_badge(chip) -> str:
 # --------------------------------------------------------------------------- #
 # commands                                                                    #
 # --------------------------------------------------------------------------- #
+def _adapter_json(a) -> dict:
+    c = a.chipset
+    return {
+        "usb_id": a.usb_id, "description": a.description, "transport": a.transport,
+        "known": a.known, "is_demo": a.is_demo, "status": a.status,
+        "chipset_id": c.id if c else None, "chipset": c.name if c else None,
+        "monitor_mode": c.monitor_mode if c else None,
+        "injection": c.injection if c else None,
+        "injection_quality": c.injection_quality if c else None,
+        "interface": a.interface.name if a.interface else None,
+        "driver": a.interface.driver if a.interface else None,
+    }
+
+
 def cmd_scan(args, db: ChipsetDB) -> int:
     adapters = detector.detect(db)
+    if getattr(args, "json", False):
+        import json
+        print(json.dumps([_adapter_json(a) for a in adapters], indent=2))
+        return 0
     if not adapters:
         print(yellow("No WiFi adapters detected."))
         return 0
@@ -203,7 +221,9 @@ def _unknown_flow(adapter, db: ChipsetDB) -> int:
 
 def cmd_monitor(args, db: ChipsetDB) -> int:
     iface = args.interface
-    if args.action == "start":
+    if args.action == "status":
+        r = mon.status()
+    elif args.action == "start":
         r = mon.enable_monitor(iface)
     elif args.action == "stop":
         r = mon.disable_monitor(iface)
@@ -228,7 +248,30 @@ def cmd_report(args, db: ChipsetDB) -> int:
 
 
 def cmd_db(args, db: ChipsetDB) -> int:
-    print(bold(f"\nChipset database ({len(db)} entries, updated {db.meta.get('updated')})\n"))
+    if getattr(args, "check", False):
+        problems = db.problems()
+        if problems:
+            print(red(bold(f"\n✗ Database has {len(problems)} problem(s):\n")))
+            for p in problems:
+                print(f"  {red('!')} {p}")
+            return 1
+        print(green(f"\n✓ Database is healthy — {len(db)} families, "
+                    f"{db.usb_id_count()} unique USB/PCI IDs, no conflicts.\n"))
+        return 0
+    if getattr(args, "json", False):
+        import json
+        raw = {"families": len(db), "usb_ids": db.usb_id_count(),
+               "updated": db.meta.get("updated"),
+               "chipsets": [{
+                   "id": c.id, "name": c.name, "vendor": c.vendor, "band": c.band,
+                   "monitor_mode": c.monitor_mode, "injection": c.injection,
+                   "injection_quality": c.injection_quality, "usb_ids": list(c.usb_ids),
+                   "drivers": [d.method for d in c.best_drivers()],
+               } for c in db.all()]}
+        print(json.dumps(raw, indent=2))
+        return 0
+    print(bold(f"\nChipset database ({len(db)} families · {db.usb_id_count()} USB/PCI IDs · "
+               f"updated {db.meta.get('updated')})\n"))
     for c in db.all():
         print(f"  {cyan(c.id):<28} {c.name}")
         print(f"      {_cap_badge(c)}  ·  {dim(c.band)}")
@@ -341,9 +384,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--no-gui", action="store_true", help="With no subcommand, scan instead of launching GUI.")
     sub = p.add_subparsers(dest="command")
 
-    sub.add_parser("scan", help="Detect WiFi adapters")
+    ps = sub.add_parser("scan", help="Detect WiFi adapters")
+    ps.add_argument("--json", action="store_true", help="Machine-readable JSON output")
     sub.add_parser("doctor", help="Check system readiness")
-    sub.add_parser("db", help="Show the chipset database")
+    pdb = sub.add_parser("db", help="Show the chipset database")
+    pdb.add_argument("--check", action="store_true", help="Validate the database for conflicts and exit non-zero on problems")
+    pdb.add_argument("--json", action="store_true", help="Machine-readable JSON output")
     sub.add_parser("gui", help="Launch the graphical interface")
 
     pr = sub.add_parser("report", help="Write a diagnostic report")
@@ -360,7 +406,7 @@ def build_parser() -> argparse.ArgumentParser:
     pin.add_argument("--offline", action="store_true", help="Prefer the bundled offline driver")
 
     pm = sub.add_parser("monitor", help="Monitor mode / injection test")
-    pm.add_argument("action", choices=["start", "stop", "test", "killservices"])
+    pm.add_argument("action", choices=["status", "start", "stop", "test", "killservices"])
     pm.add_argument("interface", nargs="?", default="wlan0")
 
     pvf = sub.add_parser("verify", help="Check a driver is installed, loaded & bound")

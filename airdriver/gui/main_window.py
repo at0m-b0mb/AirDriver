@@ -17,12 +17,12 @@ from PySide6.QtCore import Qt, QThread, QObject, Signal, QSize, QUrl, QRectF, QT
 from PySide6.QtGui import QFont, QDesktopServices, QPixmap, QPainter, QPen, QColor, QIcon
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDialog, QFrame, QHBoxLayout, QLabel,
-    QMainWindow, QMessageBox, QPlainTextEdit, QPushButton, QScrollArea,
+    QLineEdit, QMainWindow, QMessageBox, QPlainTextEdit, QPushButton, QScrollArea,
     QSizePolicy, QTextBrowser, QVBoxLayout, QWidget,
 )
 
 from .. import __version__, __codename__
-from ..core import detector, report as rep, system, verify
+from ..core import detector, monitor as mon, report as rep, system, verify
 from ..core.chipset_db import Chipset, ChipsetDB
 from ..core.detector import Adapter
 from ..core.installer import Executor, build_plan, build_remove_plan
@@ -109,6 +109,29 @@ class DiagnoseWorker(QObject):
     def run(self):
         from ..core import diagnose
         self.done.emit(diagnose.snapshot(self.db))
+
+
+class MonitorWorker(QObject):
+    """Runs a monitor-mode / injection action (airmon-ng / iw / aireplay-ng)
+    off the UI thread — several of these block for a few seconds."""
+    done = Signal(object)  # (action, monitor.CommandResult)
+
+    def __init__(self, action: str, iface: str):
+        super().__init__()
+        self.action, self.iface = action, iface
+
+    def run(self):
+        if self.action == "status":
+            r = mon.status()
+        elif self.action == "start":
+            r = mon.enable_monitor(self.iface)
+        elif self.action == "stop":
+            r = mon.disable_monitor(self.iface)
+        elif self.action == "test":
+            r = mon.test_injection(self.iface)
+        else:
+            r = mon.CommandResult(False, "unknown action")
+        self.done.emit((self.action, r))
 
 
 # --------------------------------------------------------------------------- #
@@ -267,6 +290,10 @@ class MainWindow(QMainWindow):
         lay.addSpacing(6)
         lay.addLayout(col)
         lay.addStretch(1)
+        self.btn_chips = QPushButton(f"📚 Chipsets ({len(self.db)})")
+        self.btn_chips.setToolTip("Browse & search every supported chipset and USB/PCI ID")
+        self.btn_chips.clicked.connect(self.show_chipsets)
+        lay.addWidget(self.btn_chips)
         self.btn_diag = QPushButton("🩺 Diagnose")
         self.btn_diag.setToolTip("Collect a full diagnostic snapshot (copied to clipboard) to share when stuck")
         self.btn_diag.clicked.connect(self.run_diagnose)
@@ -389,6 +416,33 @@ class MainWindow(QMainWindow):
         actions.addWidget(self.btn_report)
         lay.addLayout(actions)
 
+        # Monitor-mode / injection quick controls (wraps airmon-ng / iw / aireplay-ng)
+        montools = QHBoxLayout()
+        montools.setSpacing(8)
+        mlbl = QLabel("Monitor mode:")
+        mlbl.setObjectName("Dim")
+        self.iface_combo = QComboBox()
+        self.iface_combo.setEditable(True)
+        self.iface_combo.setMinimumWidth(120)
+        self.iface_combo.setToolTip("Wireless interface to act on (e.g. wlan0)")
+        self.iface_combo.addItem("wlan0")
+        self.btn_mon_on = QPushButton("Enable")
+        self.btn_mon_on.setToolTip("Put the interface into monitor mode (airmon-ng start / iw)")
+        self.btn_mon_off = QPushButton("Disable")
+        self.btn_mon_off.setToolTip("Return the interface to managed mode")
+        self.btn_mon_test = QPushButton("Injection test")
+        self.btn_mon_test.setToolTip("Run the aireplay-ng --test packet-injection self-check")
+        self.btn_mon_status = QPushButton("Status")
+        self.btn_mon_status.setToolTip("Show each wireless interface's current mode")
+        self._mon_btns = [self.btn_mon_on, self.btn_mon_off, self.btn_mon_test, self.btn_mon_status]
+        for b, act in zip(self._mon_btns, ("start", "stop", "test", "status")):
+            b.clicked.connect(lambda _=False, a=act: self.run_monitor(a))
+        montools.addWidget(mlbl)
+        montools.addWidget(self.iface_combo, 1)
+        for b in self._mon_btns:
+            montools.addWidget(b)
+        lay.addLayout(montools)
+
         # Log console
         log_lbl = QLabel("Activity log")
         log_lbl.setObjectName("Dim")
@@ -452,6 +506,7 @@ class MainWindow(QMainWindow):
         self.adapters = adapters
         self._render_status(info)
         self._render_cards(adapters)
+        self._refresh_ifaces(adapters)
         self.btn_rescan.setEnabled(True)
         self.btn_rescan.setText("⟳  Rescan")
         n = len(adapters)
@@ -487,6 +542,9 @@ class MainWindow(QMainWindow):
                 tip="Detection & install are simulated on this OS")
         add("online" if info.has_internet else "offline",
             ok=info.has_internet, warn=not info.has_internet)
+        self.status_strip_l.addWidget(_chip(
+            f"DB: {len(self.db)} chipsets · {self.db.usb_id_count()} IDs", T.CYAN,
+            tip="Supported chipset families and USB/PCI IDs — click 📚 Chipsets to browse"))
         self.status_strip_l.addStretch(1)
 
     def _render_cards(self, adapters):
@@ -679,29 +737,6 @@ class MainWindow(QMainWindow):
         worker.line.connect(self.log_line)
         self._start_worker(worker, self._on_install_done)
 
-    # ---- diagnostics -------------------------------------------------------
-    def run_diagnose(self):
-        if self._installing:
-            return
-        self.btn_diag.setEnabled(False)
-        self.btn_diag.setText("Collecting…")
-        self.log.clear()
-        self.log_line("Collecting diagnostic snapshot (rfkill · dmesg · dkms · interfaces)…")
-        self._start_worker(DiagnoseWorker(self.db), self._on_diagnose_done)
-
-    def _on_diagnose_done(self, text: str):
-        self.btn_diag.setEnabled(True)
-        self.btn_diag.setText("🩺 Diagnose")
-        self.log.setPlainText(text)
-        QApplication.clipboard().setText(text)
-        box = QMessageBox(self)
-        box.setIcon(QMessageBox.Information)
-        box.setWindowTitle("Diagnostic ready")
-        box.setText("Diagnostic snapshot copied to your clipboard.")
-        box.setInformativeText("It's also shown in the log on the right. Paste it into a "
-                               "GitHub issue / forum / chat when asking for help.")
-        box.exec()
-
     # ---- diagnose ----------------------------------------------------------
     def run_diagnose(self):
         if self._installing or self._scanning:
@@ -724,9 +759,105 @@ class MainWindow(QMainWindow):
 
     def _set_busy(self, busy: bool):
         for b in (self.btn_install, self.btn_plan, self.btn_rescan,
-                  self.btn_verify, self.btn_remove):
+                  self.btn_verify, self.btn_remove, *self._mon_btns):
             b.setEnabled(not busy)
         self.btn_install.setText("Installing…" if busy else "⬇  Install driver")
+
+    # ---- monitor mode / injection -----------------------------------------
+    def _refresh_ifaces(self, adapters):
+        """Populate the interface picker from live wireless interfaces."""
+        names = []
+        for a in adapters:
+            i = a.interface
+            if i and i.name and i.name not in names and not i.name.startswith("("):
+                names.append(i.name)
+        cur = self.iface_combo.currentText().strip()
+        self.iface_combo.blockSignals(True)
+        self.iface_combo.clear()
+        self.iface_combo.addItems(names or ["wlan0"])
+        if cur:
+            self.iface_combo.setCurrentText(cur)
+        self.iface_combo.blockSignals(False)
+
+    def run_monitor(self, action: str):
+        if self._installing or self._scanning:
+            return
+        iface = self.iface_combo.currentText().strip() or "wlan0"
+        if self.sysinfo and not self.sysinfo.is_linux:
+            self.log_line(f"[demo] monitor '{action}' on {iface} — this only does something "
+                          "for real on Linux (Kali/Parrot) with the adapter present.")
+            return
+        labels = {"start": "Enabling monitor mode", "stop": "Disabling monitor mode",
+                  "test": "Running injection self-test", "status": "Checking interface status"}
+        self.log_line(f"{labels.get(action, action)} on {iface}…")
+        for b in self._mon_btns:
+            b.setEnabled(False)
+        self._start_worker(MonitorWorker(action, iface), self._on_monitor_done)
+
+    def _on_monitor_done(self, result):
+        action, r = result
+        for b in self._mon_btns:
+            b.setEnabled(True)
+        self.log_line(r.output or "(no output)")
+        if not r.ok and action != "status":
+            self.log_line("⚠ That didn't succeed. Monitor mode needs root and the "
+                          "aircrack-ng / iw tools — try launching with sudo, and "
+                          "'airdriver monitor killservices' to stop interfering processes.")
+        if action in ("start", "stop"):
+            QTimer.singleShot(0, self.rescan)
+
+    # ---- supported-chipsets browser ---------------------------------------
+    def show_chipsets(self):
+        dlg = QDialog(self)
+        dlg.setWindowTitle("AirDriver — Supported chipsets")
+        dlg.resize(780, 620)
+        lay = QVBoxLayout(dlg)
+        head = QLabel(f"{len(self.db)} chipset families · {self.db.usb_id_count()} USB/PCI IDs")
+        head.setObjectName("H2")
+        lay.addWidget(head)
+        search = QLineEdit()
+        search.setPlaceholderText("Filter by name, vendor, chipset id, band, or USB id (e.g. 0bda:8812)…")
+        lay.addWidget(search)
+        view = QTextBrowser()
+        view.setOpenExternalLinks(True)
+        lay.addWidget(view, 1)
+
+        def render(query: str = ""):
+            q = query.lower().strip()
+            rows = []
+            shown = 0
+            for c in self.db.all():
+                hay = " ".join([c.id, c.name, c.vendor, c.band, *c.usb_ids]).lower()
+                if q and q not in hay:
+                    continue
+                shown += 1
+                mon_c = T.GOOD if c.monitor_mode else T.DIM
+                inj_c = T.GOOD if c.injection else T.DIM
+                path = " → ".join(d.method for d in c.best_drivers())
+                rows.append(
+                    f"<tr style='border-bottom:1px solid {T.BORDER}'>"
+                    f"<td style='padding:7px 10px'><b>{c.name}</b>"
+                    f"<br><span style='color:{T.DIM};font-size:11px'>{c.id} · {c.vendor} · {c.band}</span>"
+                    f"<br><span style='color:{T.DIM};font-size:10px'>{len(c.usb_ids)} IDs · {path}</span></td>"
+                    f"<td style='padding:7px 10px;white-space:nowrap'>"
+                    f"<span style='color:{mon_c}'>monitor {'✓' if c.monitor_mode else '✗'}</span><br>"
+                    f"<span style='color:{inj_c}'>injection {'✓' if c.injection else '✗'}</span>"
+                    f"<br><span style='color:{T.DIM};font-size:11px'>{c.injection_quality}</span></td>"
+                    f"</tr>")
+            body = "".join(rows) or f"<tr><td style='padding:10px;color:{T.DIM}'>No matches.</td></tr>"
+            view.setHtml(f"<table width='100%' style='border-collapse:collapse'>{body}</table>")
+            head.setText(f"{shown} of {len(self.db)} families shown · {self.db.usb_id_count()} USB/PCI IDs total")
+
+        search.textChanged.connect(render)
+        render()
+        row = QHBoxLayout()
+        btn_close = QPushButton("Close")
+        btn_close.setObjectName("Primary")
+        btn_close.clicked.connect(dlg.accept)
+        row.addStretch(1)
+        row.addWidget(btn_close)
+        lay.addLayout(row)
+        dlg.exec()
 
     # ---- report ------------------------------------------------------------
     def export_report(self):
