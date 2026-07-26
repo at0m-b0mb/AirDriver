@@ -6,7 +6,38 @@ Pure stdlib unittest so it runs on a stock box with no pip installs.
 """
 import unittest
 
-from airdriver.core.chipset_db import ChipsetDB
+from airdriver.core.chipset_db import ChipsetDB, data_path
+
+
+class DataPath(unittest.TestCase):
+    """`airdriver/data/` is a plain directory, not a package. Resolving it via
+    ``resources.files('airdriver.data')`` raises on Python 3.9 (namespace
+    package, origin=None) — which broke the CLI outright there. data_path()
+    must resolve from the filesystem without touching importlib."""
+
+    def test_finds_the_database(self):
+        p = data_path("chipsets.json")
+        self.assertTrue(p.is_file(), f"{p} should exist")
+
+    def test_joins_nested_parts(self):
+        p = data_path("drivers", "README.md")
+        self.assertEqual(p.name, "README.md")
+        self.assertEqual(p.parent.name, "drivers")
+
+    def test_does_not_need_importlib(self):
+        import airdriver.core.chipset_db as mod
+        real = mod.resources
+
+        class Boom:
+            def files(self, _name):
+                raise AssertionError("importlib.resources should not be needed")
+
+        mod.resources = Boom()
+        try:
+            self.assertTrue(data_path("chipsets.json").is_file())
+            self.assertGreaterEqual(len(ChipsetDB.load()), 29)
+        finally:
+            mod.resources = real
 
 
 class DatabaseIntegrity(unittest.TestCase):

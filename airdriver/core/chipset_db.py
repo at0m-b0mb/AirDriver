@@ -14,6 +14,26 @@ from pathlib import Path
 from typing import Optional
 
 
+def data_path(*parts: str) -> Path:
+    """Resolve a path inside ``airdriver/data/``.
+
+    Deliberately filesystem-first: ``resources.files("airdriver.data")`` raises
+    on Python 3.9 because ``data/`` is a plain directory (a namespace package,
+    whose ``origin`` is None), and 3.9 is still shipped by distros we target.
+    The importlib branch is the fallback for installs where the package isn't a
+    real directory on disk (zipped/frozen).
+    """
+    local = Path(__file__).resolve().parent.parent / "data"
+    for p in parts:
+        local = local / p
+    if local.exists():
+        return local
+    base = Path(str(resources.files("airdriver"))) / "data"
+    for p in parts:
+        base = base / p
+    return base
+
+
 @dataclass(frozen=True)
 class DriverOption:
     """One way to obtain a working driver, in ``priority`` order (1 = best)."""
@@ -181,8 +201,7 @@ class ChipsetDB:
         if path is not None:
             raw = json.loads(Path(path).read_text())
         else:
-            with resources.files("airdriver.data").joinpath("chipsets.json").open() as fh:
-                raw = json.load(fh)
+            raw = json.loads(data_path("chipsets.json").read_text())
         chipsets = [Chipset.from_dict(c) for c in raw.get("chipsets", [])]
         meta = {k: v for k, v in raw.items() if k != "chipsets"}
         return cls(chipsets, meta)

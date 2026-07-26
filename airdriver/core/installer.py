@@ -17,11 +17,10 @@ import re
 import shlex
 import subprocess
 from dataclasses import dataclass, field
-from importlib import resources
 from pathlib import Path
 from typing import Callable, Optional
 
-from .chipset_db import Chipset, DriverOption
+from .chipset_db import Chipset, DriverOption, data_path
 from .detector import Adapter
 from .modules import BLACKLIST_FILE, blacklist_snippet, module_available
 from .system import SystemInfo
@@ -75,10 +74,9 @@ def offline_source_dir(option: DriverOption) -> Optional[Path]:
     if not option.path:
         return None
     try:
-        root = resources.files("airdriver.data")
         # option.path is like "drivers/8812au-20210820" (relative to data/).
-        candidate = Path(str(root)) / option.path
-    except (ModuleNotFoundError, AttributeError):
+        candidate = data_path(*option.path.split("/"))
+    except (ModuleNotFoundError, AttributeError, TypeError):
         return None
     if candidate.is_dir() and any(candidate.iterdir()):
         return candidate
