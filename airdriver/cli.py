@@ -37,13 +37,18 @@ def cyan(s): return _c(s, "36")
 def dim(s): return _c(s, "2")
 
 
-BANNER = rf"""{cyan(r'''
+# NB: keep the backslash-laden ASCII art in its own plain raw string. Inlining it
+# into an f-string's {expression} is a SyntaxError on Python 3.9–3.11 (only 3.12+
+# allows backslashes inside f-string expressions) — and those are the versions
+# Kali/Parrot ship, so this must parse there.
+_ART = r"""
    ___  _     ___      _
   / _ |(_)___/ _ \____(_)  _____ ____
  / __ |/ / __/ // / __/ / |/ / -_) __/
-/_/ |_/_/_/ /____/_/ /_/|___/\__/_/   ''')}  {bold('AirDriver')} {dim('v'+__version__)} · {dim(__codename__)}
-  {dim('WiFi adapter driver auto-installer for Kali Linux & Parrot OS')}
-"""
+/_/ |_/_/_/ /____/_/ /_/|___/\__/_/   """
+
+BANNER = (f"{cyan(_ART)}  {bold('AirDriver')} {dim('v' + __version__)} · {dim(__codename__)}\n"
+          f"  {dim('WiFi adapter driver auto-installer for Kali Linux & Parrot OS')}\n")
 
 
 def _cap_badge(chip) -> str:
