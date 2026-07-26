@@ -37,6 +37,12 @@ first real test-suite + CI so it stays that way.
   TP-Link `AU`/`CU`/`BU` IDs) were mapped to two chipsets at once, so lookups silently
   resolved to whichever loaded last and could mis-identify hardware. All IDs are now
   unique and matched to the correct chipset per the maintainer lists — enforced by tests.
+- **AirDriver would not run at all on Python 3.9–3.11** (the versions Kali/Parrot ship),
+  caught by the new CI matrix:
+  - `cli.py` inlined a backslash-containing raw string inside an f-string expression —
+    a `SyntaxError` before 3.12, so the CLI failed to even import.
+  - `resources.files("airdriver.data")` raised `TypeError` on 3.9 because `data/` is a
+    namespace directory; the chipset database now resolves from the filesystem first.
 - **Dead/duplicate GUI code:** `run_diagnose`/`_on_diagnose_done` were each defined twice.
 - **Socket leak** in the internet-connectivity check (used `create_connection` + `with`).
 
