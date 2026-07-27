@@ -2,6 +2,49 @@
 
 All notable changes to AirDriver are documented here.
 
+## [0.4.0] — 2026-07-26 · "Field Kit"
+
+Turns AirDriver from an *installer* into a driver **manager**, and roughly triples the
+hardware it recognises.
+
+### Added — driver management
+- **`airdriver status`** — the dashboard that was missing: every DKMS driver on the box,
+  which kernels it's built for, whether it's built for the one you're *running*, whether
+  it's loaded, and which chipset it serves. `--json` for scripts.
+- **`airdriver rebuild`** — the fix for the single most common way Wi-Fi breaks on Kali:
+  you `apt full-upgrade`, reboot into a new kernel, and the out-of-tree module was never
+  built for it. Installs matching headers if needed, runs `dkms autoinstall`, re-checks.
+- **`airdriver sign`** — Secure Boot support. Generates a MOK signing key once, signs every
+  DKMS module built for the running kernel (correctly decompressing and **recompressing**
+  `.ko.xz`/`.ko.zst`/`.ko.gz`), then prints the one step that needs a password you choose:
+  `mokutil --import` + reboot. Enrollment is deliberately never automated.
+- **`airdriver modeswitch`** — many cheap dongles enumerate as a fake CD-ROM full of Windows
+  drivers and never appear as Wi-Fi. AirDriver now detects that state during a scan and can
+  eject it with `usb_modeswitch`.
+- **`airdriver recommend`** — ranks the chipsets that genuinely do monitor mode *and*
+  injection, preferring ones needing no driver build. `--band 2.4|5`.
+- GUI: a **🔧 Drivers** panel showing the same status with one-click Rebuild and Sign, and a
+  scan-time warning when an adapter is stuck in storage mode.
+
+### Changed
+- Chipset database grown to **32 families / 759 unique USB+PCI IDs** (from 29 / 218). Every
+  new id is extracted from the Linux kernel's own driver device tables — `rtl8xxxu` (split
+  per chip via its `*_fops` markers), `rt2800usb`, `ath9k_htc` (AR9271 vs AR7010 via
+  `driver_info`), `carl9170`, `mt76x0u`/`mt76x2u`/`mt7601u`/`mt7921u`/`mt7925u`,
+  `rtw88`/`rtw89` and `rtl8187` — so nothing is guessed.
+- New families: **RTL8723AU**, **RTL8192FU** (needs kernel 6.2+), and **RT2800-series
+  (other)** — a catch-all covering 300+ rebadged in-kernel `rt2800usb` adapters that
+  previously showed up as "unknown".
+- `chipsets.json` is now written with wrapped id lists, so a 300-entry array stays readable.
+
+### Fixed
+- **Eight more mis-assigned USB IDs**, caught by cross-checking the kernel tables:
+  `2357:0106` (RTL8814AU, was 8812au), `2357:0108`/`2357:0109` (RTL8192EU, were 8812au),
+  `7392:b611` (RTL8821AU, was 8192eu), and `0b05:17d1`/`148f:760a`/`2357:0123`/`7392:b711`
+  (MT7610U, were mt7612u/mt7601u). Each would have installed the wrong driver.
+- `Executor` crashed with `AttributeError` on any plan without a chipset — which the new
+  management plans are. It now labels those by method instead.
+
 ## [0.3.0] — 2026-07-25 · "Full Spectrum"
 
 Broader, more accurate device coverage; installs that find a way to succeed; and a

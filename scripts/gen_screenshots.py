@@ -9,6 +9,7 @@ demo adapters (the same view users see on a non-Linux box):
 Produces:
   docs/screenshots/gui-overview.png       — main window, adapter selected
   docs/screenshots/gui-install-plan.png   — unknown adapter + previewed plan
+  docs/screenshots/gui-chipsets.png       — searchable chipset browser
 """
 from __future__ import annotations
 
@@ -64,8 +65,38 @@ def main() -> int:
     win.grab().save(str(OUT / "gui-install-plan.png"))
     print("wrote", OUT / "gui-install-plan.png")
 
+    # 3) The chipset browser, filtered — shows the breadth of the database.
+    #    Built directly (rather than via the modal dialog) so this stays headless.
+    _shot_chipsets(app, win)
+
     win.close()
     return 0
+
+
+def _shot_chipsets(app, win):
+    """Render the chipset-browser dialog without entering its modal loop."""
+    from PySide6.QtWidgets import QDialog
+    orig_exec = QDialog.exec
+    captured = {}
+
+    def fake_exec(self):
+        captured["dlg"] = self
+        return 0
+
+    QDialog.exec = fake_exec
+    try:
+        win.show_chipsets()
+        dlg = captured.get("dlg")
+        if dlg is None:
+            return
+        dlg.resize(880, 620)
+        dlg.show()
+        _settle(app, 500)
+        dlg.grab().save(str(OUT / "gui-chipsets.png"))
+        print("wrote", OUT / "gui-chipsets.png")
+        dlg.close()
+    finally:
+        QDialog.exec = orig_exec
 
 
 if __name__ == "__main__":

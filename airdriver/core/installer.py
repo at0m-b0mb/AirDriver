@@ -44,8 +44,10 @@ class Step:
 
 @dataclass
 class InstallPlan:
-    adapter: Adapter
-    chipset: Chipset
+    # Both are None for management plans (rebuild / sign / modeswitch), which
+    # act on the system rather than on one specific adapter.
+    adapter: Optional[Adapter]
+    chipset: Optional[Chipset]
     method: str                     # chosen DriverOption.method (or "kernel_native")
     summary: str
     steps: list[Step] = field(default_factory=list)
@@ -471,7 +473,9 @@ class Executor:
         return shell
 
     def run(self, plan: InstallPlan, log: LogFn) -> bool:
-        log(f"=== AirDriver install: {plan.chipset.name} ===")
+        # Management plans (rebuild/sign/modeswitch) aren't tied to one chipset.
+        target = plan.chipset.name if plan.chipset else plan.method
+        log(f"=== AirDriver {plan.method}: {target} ===")
         log(plan.summary)
         for w in plan.warnings:
             log(f"  ⚠ {w}")

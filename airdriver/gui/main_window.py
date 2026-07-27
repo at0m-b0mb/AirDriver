@@ -111,6 +111,19 @@ class DiagnoseWorker(QObject):
         self.done.emit(diagnose.snapshot(self.db))
 
 
+class ManageWorker(QObject):
+    """Collects the DKMS/driver-management status off the UI thread."""
+    done = Signal(object)  # manage.Status
+
+    def __init__(self, db: ChipsetDB, info):
+        super().__init__()
+        self.db, self.info = db, info
+
+    def run(self):
+        from ..core import manage
+        self.done.emit(manage.status(self.db, self.info))
+
+
 class MonitorWorker(QObject):
     """Runs a monitor-mode / injection action (airmon-ng / iw / aireplay-ng)
     off the UI thread — several of these block for a few seconds."""
@@ -290,6 +303,10 @@ class MainWindow(QMainWindow):
         lay.addSpacing(6)
         lay.addLayout(col)
         lay.addStretch(1)
+        self.btn_manage = QPushButton("🔧 Drivers")
+        self.btn_manage.setToolTip("Installed drivers, kernel-upgrade rebuilds, Secure Boot signing")
+        self.btn_manage.clicked.connect(self.show_manage)
+        lay.addWidget(self.btn_manage)
         self.btn_chips = QPushButton(f"📚 Chipsets ({len(self.db)})")
         self.btn_chips.setToolTip("Browse & search every supported chipset and USB/PCI ID")
         self.btn_chips.clicked.connect(self.show_chipsets)
@@ -512,6 +529,14 @@ class MainWindow(QMainWindow):
         n = len(adapters)
         self.log_line(f"Found {n} adapter(s)." + (
             "  (demo data — not running on Linux)" if adapters and adapters[0].is_demo else ""))
+
+        # A dongle stuck in "driver CD-ROM" mode isn't a Wi-Fi device yet — say so,
+        # otherwise the user just sees a missing adapter.
+        from ..core import manage
+        for uid, desc in manage.storage_mode_devices(adapters):
+            self.log_line(f"\n⚠ {uid} is in driver-CD (storage) mode — {desc}")
+            self.log_line("   It won't appear as Wi-Fi until it's switched. Run:  "
+                          f"sudo airdriver modeswitch {uid}")
 
     def _render_status(self, info):
         while self.status_strip_l.count():
@@ -758,8 +783,8 @@ class MainWindow(QMainWindow):
             "clipboard.\n\nPaste it wherever you're asking for help.")
 
     def _set_busy(self, busy: bool):
-        for b in (self.btn_install, self.btn_plan, self.btn_rescan,
-                  self.btn_verify, self.btn_remove, *self._mon_btns):
+        for b in (self.btn_install, self.btn_plan, self.btn_rescan, self.btn_verify,
+                  self.btn_remove, self.btn_manage, *self._mon_btns):
             b.setEnabled(not busy)
         self.btn_install.setText("Installing…" if busy else "⬇  Install driver")
 
@@ -805,6 +830,112 @@ class MainWindow(QMainWindow):
                           "'airdriver monitor killservices' to stop interfering processes.")
         if action in ("start", "stop"):
             QTimer.singleShot(0, self.rescan)
+
+    # ---- driver management -------------------------------------------------
+    def show_manage(self):
+        """Installed-driver dashboard: what's built for which kernel, plus the
+        two repairs people actually need (rebuild after a kernel upgrade, and
+        Secure Boot signing)."""
+        from ..core import manage
+        if self.sysinfo is None:
+            return
+        st = manage.status(self.db, self.sysinfo)
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("AirDriver — Driver management")
+        dlg.resize(760, 560)
+        lay = QVBoxLayout(dlg)
+
+        head = QLabel("Installed drivers")
+        head.setObjectName("H2")
+        lay.addWidget(head)
+
+        sub = QLabel(f"Running kernel <b>{st.kernel}</b>"
+                     + (f" · Secure Boot <b>{st.secure_boot}</b>" if st.secure_boot != "unknown" else ""))
+        sub.setObjectName("Dim")
+        sub.setTextFormat(Qt.RichText)
+        lay.addWidget(sub)
+
+        view = QTextBrowser()
+        rows = []
+        for m in st.drivers:
+            ok = m.ok_for_running_kernel
+            colour = T.GOOD if ok else T.DANGER
+            label = "built" if ok else "NOT built — stale"
+            rows.append(
+                f"<tr style='border-bottom:1px solid {T.BORDER}'>"
+                f"<td style='padding:7px 10px'><b>{m.dkms.name}</b>"
+                f"<br><span style='color:{T.DIM};font-size:11px'>v{m.dkms.version}"
+                f"{' · ' + ', '.join(m.chipsets[:2]) if m.chipsets else ''}</span></td>"
+                f"<td style='padding:7px 10px;white-space:nowrap;color:{colour}'>{label}"
+                f"<br><span style='color:{T.DIM};font-size:11px'>"
+                f"{'loaded' if m.loaded else 'not loaded'}</span></td></tr>")
+        if rows:
+            body = ("<table width='100%' style='border-collapse:collapse'>"
+                    + "".join(rows) + "</table>")
+        else:
+            body = (f"<p style='color:{T.DIM}'>No DKMS-managed drivers are registered."
+                    "<br>That's normal when every adapter uses an in-kernel driver.</p>")
+        msgs = "".join(f"<p style='color:{T.WARN}'>{m}</p>" for m in st.messages)
+        view.setHtml(body + msgs)
+        lay.addWidget(view, 1)
+
+        row = QHBoxLayout()
+        btn_rebuild = QPushButton("Rebuild for this kernel")
+        btn_rebuild.setToolTip("Rebuild DKMS modules against the running kernel — the fix "
+                               "when Wi-Fi stops working after a system upgrade")
+        btn_rebuild.setObjectName("Primary" if st.stale else "")
+        btn_rebuild.clicked.connect(lambda: (dlg.accept(), self.run_rebuild()))
+        btn_sign = QPushButton("Sign for Secure Boot")
+        btn_sign.setToolTip("Generate a signing key and sign the built modules so a "
+                            "Secure Boot kernel will load them")
+        btn_sign.clicked.connect(lambda: (dlg.accept(), self.run_sign()))
+        btn_close = QPushButton("Close")
+        btn_close.clicked.connect(dlg.accept)
+        row.addWidget(btn_rebuild)
+        row.addWidget(btn_sign)
+        row.addStretch(1)
+        row.addWidget(btn_close)
+        lay.addLayout(row)
+        dlg.exec()
+
+    def _run_management_plan(self, plan, what: str):
+        if self._installing:
+            return
+        if self.sysinfo and not self.sysinfo.is_linux:
+            self.log.clear()
+            self.log_line(f"[demo] '{what}' only does something on Linux. The plan is:\n")
+            self.log_line(plan.describe())
+            return
+        self._verify_after = None
+        self._installing = True
+        self.log.clear()
+        self._set_busy(True)
+        worker = InstallWorker(plan, self.sysinfo, False)
+        worker.line.connect(self.log_line)
+        self._start_worker(worker, self._on_install_done)
+
+    def run_rebuild(self):
+        from ..core import manage
+        plan = manage.build_rebuild_plan(self.sysinfo)
+        self._run_management_plan(plan, "rebuild")
+
+    def run_sign(self):
+        from ..core import manage
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Information)
+        box.setWindowTitle("Secure Boot signing")
+        box.setText("Generate a signing key and sign the installed driver modules?")
+        box.setInformativeText(
+            "Afterwards you must enroll the key yourself — it needs a one-time password "
+            "you choose and a reboot:\n\n"
+            f"    sudo mokutil --import {manage.MOK_CRT}\n\n"
+            "Then reboot and pick 'Enroll MOK' on the blue screen. The exact steps are "
+            "printed in the log when signing finishes.")
+        box.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
+        if box.exec() != QMessageBox.Ok:
+            return
+        self._run_management_plan(manage.build_sign_plan(self.sysinfo), "sign")
 
     # ---- supported-chipsets browser ---------------------------------------
     def show_chipsets(self):

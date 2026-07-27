@@ -1,8 +1,9 @@
 {
   "schema_version": 1,
-  "updated": "2026-07-25",
+  "updated": "2026-07-26",
   "_about": "AirDriver chipset database. Maps USB/PCI VID:PID -> chipset -> driver install strategy. 'usb_ids' are lowercase 'vid:pid' (works for PCI ids too). 'kernel_native' tells AirDriver when an in-kernel driver already exists so it can SKIP a pointless DKMS build. 'drivers' are tried in 'priority' order (1 = first). 'monitor_mode'/'injection' are honest capability flags for pentest use; some chips connect fine but can't inject. Every usb_id is unique across the whole file (enforced by tests/test_chipset_db.py). Extend freely: add entries or usb_ids and AirDriver picks them up on next scan. PRs welcome at https://github.com/at0m-b0mb/AirDriver.",
   "injection_quality_scale": ["unknown", "poor", "fair", "good", "excellent"],
+  "_id_sources": "USB IDs are taken from the Linux kernel's own driver device tables (rtl8xxxu, rt2800usb, ath9k_htc, carl9170, mt76*, rtw88/rtw89, rtl8187) and the morrownr supported-device-IDs lists for out-of-tree drivers. Do not invent ids: a wrong id installs the wrong driver.",
   "chipsets": [
     {
       "id": "rtl8812au",
@@ -14,8 +15,18 @@
       "injection": true,
       "injection_quality": "good",
       "notes": "The classic ALFA AWUS036ACH chipset. Monitor mode can get unstable after long sessions on some firmware revisions; morrownr driver is more stable than the kernel rtw88 path for injection work.",
-      "adapters": ["ALFA AWUS036ACH", "ALFA AWUS036AC", "TP-Link Archer T4U v1", "Netgear A6210", "D-Link DWA-172", "EnGenius EUB1200AC"],
-      "usb_ids": ["0bda:8812", "0bda:881a", "0bda:881b", "0bda:881c", "0409:0408", "0411:025d", "04bb:0952", "050d:1106", "050d:1109", "0586:3426", "0789:016e", "07b8:8812", "0846:9051", "0b05:17d2", "0df6:0074", "0e66:0022", "1058:0632", "13b1:003f", "148f:9097", "1740:0100", "2001:330e", "2001:3313", "2001:3315", "2001:3316", "2019:ab30", "20f4:805b", "2357:0101", "2357:0103", "2357:0106", "2357:0108", "2357:0109", "2357:010d", "2357:010e", "2357:010f", "2357:0122", "2604:0012", "7392:a822"],
+      "adapters": [
+        "ALFA AWUS036ACH", "ALFA AWUS036AC", "TP-Link Archer T4U v1", "Netgear A6210",
+        "D-Link DWA-172", "EnGenius EUB1200AC"
+      ],
+      "usb_ids": [
+        "0409:0408", "0411:025d", "04bb:0952", "050d:1106", "050d:1109", "0586:3426",
+        "0789:016e", "07b8:8812", "0846:9051", "0b05:17d2", "0bda:8812", "0bda:881a",
+        "0bda:881b", "0bda:881c", "0df6:0074", "0e66:0022", "1058:0632", "13b1:003f",
+        "148f:9097", "1740:0100", "2001:330e", "2001:3313", "2001:3315", "2001:3316",
+        "2019:ab30", "20f4:805b", "2357:0101", "2357:0103", "2357:010d", "2357:010e",
+        "2357:010f", "2357:0122", "2604:0012", "7392:a822"
+      ],
       "kernel_native": {"module": "rtw88_8812au", "min_kernel": "6.14", "recommended_kernel": "6.16"},
       "drivers": [
         {"method": "apt", "package": "realtek-rtl88xxau-dkms", "distro": ["kali", "parrot", "debian", "ubuntu"], "priority": 1},
@@ -34,8 +45,17 @@
       "injection": true,
       "injection_quality": "fair",
       "notes": "Smaller/cheaper AC600 sibling of the 8812au. Good for travel; lower TX power. 8811AU has no active-monitor VIF on the in-kernel path.",
-      "adapters": ["ALFA AWUS036ACS", "TP-Link Archer T2U v1", "Edimax EW-7811UTC", "Netgear A6100", "D-Link DWA-171"],
-      "usb_ids": ["0bda:0811", "0bda:0820", "0bda:0821", "0bda:0823", "0bda:8822", "0bda:a811", "0411:0242", "0411:029b", "04bb:0953", "056e:4007", "056e:400e", "056e:400f", "0846:9052", "0e66:0023", "2001:3314", "2001:3318", "2019:ab32", "20f4:804b", "2357:011e", "2357:011f", "2357:0120", "3823:6249", "7392:a811", "7392:a812", "7392:a813"],
+      "adapters": [
+        "ALFA AWUS036ACS", "TP-Link Archer T2U v1", "Edimax EW-7811UTC", "Netgear A6100",
+        "D-Link DWA-171"
+      ],
+      "usb_ids": [
+        "0411:0242", "0411:029b", "04bb:0953", "056e:4007", "056e:400e", "056e:400f",
+        "0846:9052", "0bda:0811", "0bda:0820", "0bda:0821", "0bda:0823", "0bda:8822",
+        "0bda:a811", "0e66:0023", "2001:3314", "2001:3318", "2019:ab32", "20f4:804b",
+        "2357:011e", "2357:011f", "2357:0120", "3823:6249", "7392:a811", "7392:a812",
+        "7392:a813", "7392:b611"
+      ],
       "kernel_native": {"module": "rtw88_8821au", "min_kernel": "6.14", "recommended_kernel": "6.16"},
       "drivers": [
         {"method": "apt", "package": "realtek-rtl88xxau-dkms", "distro": ["kali", "parrot", "debian", "ubuntu"], "priority": 1},
@@ -55,7 +75,11 @@
       "injection_quality": "good",
       "notes": "High-power 4-antenna beast (ALFA AWUS1900). Draws a lot of current — use a powered hub on SBCs. In-kernel rtw88 support landed 6.15 / optimized 6.16.",
       "adapters": ["ALFA AWUS1900", "ALFA AWUS036ACA"],
-      "usb_ids": ["0bda:8813"],
+      "usb_ids": [
+        "056e:400b", "056e:400d", "0846:9054", "0b05:1817", "0b05:1852", "0b05:1853",
+        "0bda:8813", "0e66:0026", "2001:331a", "20f4:809a", "20f4:809b", "2357:0106",
+        "7392:a833", "7392:a834"
+      ],
       "kernel_native": {"module": "rtw88_8814au", "min_kernel": "6.16", "recommended_kernel": "6.17"},
       "drivers": [
         {"method": "apt", "package": "realtek-rtl8814au-dkms", "distro": ["kali", "parrot"], "priority": 1},
@@ -74,8 +98,15 @@
       "injection": true,
       "injection_quality": "fair",
       "notes": "Common in tiny nano adapters (TP-Link Archer T2U Nano/Plus). No mainline in-kernel driver yet — DKMS required.",
-      "adapters": ["TP-Link Archer T2U Nano", "TP-Link Archer T2U Plus", "ALFA AWUS036ACU", "D-Link DWA-171 rev B", "Edimax EW-7811UAC"],
-      "usb_ids": ["0bda:c811", "0bda:c820", "0bda:c821", "0bda:c82a", "0bda:c82b", "0bda:c830", "0bda:c80c", "0bda:b820", "0bda:b82b", "0bda:8811", "0bda:8731", "0bda:2006", "2001:331d", "7392:c811", "7392:d811"],
+      "adapters": [
+        "TP-Link Archer T2U Nano", "TP-Link Archer T2U Plus", "ALFA AWUS036ACU",
+        "D-Link DWA-171 rev B", "Edimax EW-7811UAC"
+      ],
+      "usb_ids": [
+        "0bda:2006", "0bda:8731", "0bda:8811", "0bda:b820", "0bda:b82b", "0bda:c80c",
+        "0bda:c811", "0bda:c820", "0bda:c821", "0bda:c82a", "0bda:c82b", "0bda:c830",
+        "2001:331d", "7392:c811", "7392:d811"
+      ],
       "kernel_native": null,
       "drivers": [
         {"method": "apt", "package": "realtek-rtl8821cu-dkms", "distro": ["kali", "parrot"], "priority": 1},
@@ -95,7 +126,11 @@
       "injection_quality": "fair",
       "notes": "This is the chip inside TP-Link TL-WN722N v2/v3 (the v1 is AR9271 — a very common mix-up!). The in-kernel r8188eu lacks reliable monitor mode; use the aircrack/morrownr DKMS driver and blacklist the in-tree module.",
       "adapters": ["TP-Link TL-WN722N v2/v3", "ALFA AWUS036NEH"],
-      "usb_ids": ["0bda:8179", "0bda:0179", "2357:010c", "2357:0111", "2c4e:0102"],
+      "usb_ids": [
+        "056e:4008", "07b8:8179", "0b05:18f0", "0bda:0179", "0bda:8179", "0bda:ffef",
+        "0df6:0076", "2001:330f", "2001:3310", "2001:3311", "2001:331b", "2357:010c",
+        "2357:0111", "2c4e:0102", "7392:b811"
+      ],
       "kernel_native": null,
       "drivers": [
         {"method": "apt", "package": "realtek-rtl8188eus-dkms", "distro": ["kali", "parrot"], "priority": 1},
@@ -134,7 +169,10 @@
       "injection_quality": "fair",
       "notes": "Decent 2.4 GHz-only option. The in-kernel rtl8xxxu works for connectivity but the DKMS driver is more reliable for injection.",
       "adapters": ["TP-Link TL-WN822N v4/v5", "Edimax EW-7612U"],
-      "usb_ids": ["0bda:818b", "0bda:818c", "2357:0107", "2019:ab33", "7392:b611"],
+      "usb_ids": [
+        "0bda:818b", "0bda:818c", "2001:3312", "2001:3319", "2019:ab33", "2357:0107",
+        "2357:0108", "2357:0109", "2357:0126", "2c4e:0100", "2c4e:0104"
+      ],
       "kernel_native": {"module": "rtl8xxxu", "min_kernel": "5.10", "recommended_kernel": "6.0"},
       "drivers": [
         {"method": "apt", "package": "realtek-rtl8192eu-dkms", "distro": ["kali", "parrot"], "priority": 1},
@@ -154,7 +192,12 @@
       "injection_quality": "excellent",
       "notes": "The legendary original ALFA AWUS036H. Ancient but rock-solid injection. Fully in-kernel (rtl8187) — AirDriver just confirms the module loads, no build needed.",
       "adapters": ["ALFA AWUS036H"],
-      "usb_ids": ["0bda:8187", "0bda:8189", "0bda:8197", "0bda:8198"],
+      "usb_ids": [
+        "03f0:ca02", "050d:705e", "0769:11f2", "0789:010c", "0846:4260", "0846:6100",
+        "0846:6a00", "0b05:171d", "0bda:8187", "0bda:8189", "0bda:8197", "0bda:8198",
+        "0df6:000d", "0df6:0028", "0df6:0029", "114b:0150", "1371:9401", "13d1:abe6",
+        "1737:0073", "18e8:6232", "1b75:8187"
+      ],
       "kernel_native": {"module": "rtl8187", "min_kernel": "2.6", "recommended_kernel": "any"},
       "drivers": [
         {"method": "kernel_native", "module": "rtl8187", "priority": 1}
@@ -172,7 +215,12 @@
       "injection_quality": "excellent",
       "notes": "Gold-standard 2.4 GHz pentest chip (ALFA AWUS036NHA, TL-WN722N v1). Fully in-kernel via ath9k_htc but needs the linux-firmware 'htc_9271' blob. AirDriver verifies the firmware is present.",
       "adapters": ["ALFA AWUS036NHA", "TP-Link TL-WN722N v1", "Panda PAU05"],
-      "usb_ids": ["0cf3:9271", "0cf3:1006", "0cf3:7015", "040d:3801"],
+      "usb_ids": [
+        "040d:3801", "0471:209e", "04ca:4605", "057c:8403", "07b8:9271", "07d1:3a10",
+        "0846:9030", "0cf3:1006", "0cf3:20ff", "0cf3:7015", "0cf3:9271", "0cf3:b002",
+        "0cf3:b003", "13d3:3327", "13d3:3328", "13d3:3346", "13d3:3348", "13d3:3349",
+        "13d3:3350", "1eda:2315"
+      ],
       "kernel_native": {"module": "ath9k_htc", "min_kernel": "2.6.39", "recommended_kernel": "any", "firmware": "htc_9271.fw"},
       "drivers": [
         {"method": "kernel_native", "module": "ath9k_htc", "firmware_pkg": "firmware-atheros", "priority": 1}
@@ -190,7 +238,7 @@
       "injection_quality": "good",
       "notes": "Dual-band Atheros sibling of the AR9271. In-kernel ath9k_htc, needs the htc_7010 firmware blob.",
       "adapters": ["ALFA AWUS051NH v2", "Netgear WNDA3200"],
-      "usb_ids": ["0cf3:7010", "0846:9018"],
+      "usb_ids": ["0411:017f", "0411:0197", "04da:3904", "083a:a704", "0846:9018", "0930:0a08", "0cf3:7010"],
       "kernel_native": {"module": "ath9k_htc", "min_kernel": "2.6.39", "recommended_kernel": "any", "firmware": "htc_7010.fw"},
       "drivers": [
         {"method": "kernel_native", "module": "ath9k_htc", "firmware_pkg": "firmware-atheros", "priority": 1}
@@ -208,7 +256,10 @@
       "injection_quality": "good",
       "notes": "Old reliable. Fully in-kernel via rt2800usb. Common in many cheap-but-capable dongles.",
       "adapters": ["ALFA AWUS036NH", "Panda PAU06"],
-      "usb_ids": ["148f:3070", "148f:3071", "148f:3072", "148f:2870", "148f:2770", "0bda:8070", "07b8:3070", "1737:0077", "083a:7512"],
+      "usb_ids": [
+        "07b8:3070", "083a:7512", "0bda:8070", "148f:2770", "148f:2870", "148f:3070",
+        "148f:3071", "148f:3072", "1737:0077"
+      ],
       "kernel_native": {"module": "rt2800usb", "min_kernel": "2.6", "recommended_kernel": "any"},
       "drivers": [
         {"method": "kernel_native", "module": "rt2800usb", "priority": 1}
@@ -244,7 +295,13 @@
       "injection_quality": "good",
       "notes": "Solid in-kernel mt76x0u driver since 4.19. ALFA AWUS036ACHM. No DKMS needed on modern kernels.",
       "adapters": ["ALFA AWUS036ACHM", "Panda PAU0B"],
-      "usb_ids": ["0e8d:7610", "0e8d:7630", "0e8d:7650"],
+      "usb_ids": [
+        "04bb:0951", "057c:8502", "0586:3425", "07b8:7610", "0b05:17d1", "0b05:17db",
+        "0df6:0075", "0df6:0079", "0e8d:7610", "0e8d:7630", "0e8d:7650", "13b1:003e",
+        "148f:760a", "148f:7610", "148f:761a", "2001:3d02", "2019:ab31", "20f4:806b",
+        "2357:0105", "2357:010b", "2357:0123", "293c:5702", "7392:a711", "7392:b711",
+        "7392:c711"
+      ],
       "kernel_native": {"module": "mt76x0u", "min_kernel": "4.19", "recommended_kernel": "5.4"},
       "drivers": [
         {"method": "kernel_native", "module": "mt76x0u", "priority": 1}
@@ -262,7 +319,11 @@
       "injection_quality": "excellent",
       "notes": "Top pick for modern pentest work: excellent in-kernel mt76x2u driver, very stable monitor mode, high injection success. No DKMS needed.",
       "adapters": ["ALFA AWUS036ACM", "Panda PAU0D", "Netgear A6150"],
-      "usb_ids": ["0e8d:7612", "0e8d:7662", "0e8d:7632", "0b05:17d1", "7392:b711", "2357:0123", "0846:9053", "057c:8503"],
+      "usb_ids": [
+        "045e:02e6", "045e:02fe", "0471:2126", "0471:7600", "056e:400a", "057c:8503",
+        "0846:9014", "0846:9053", "0b05:17eb", "0b05:180b", "0b05:1833", "0e8d:7612",
+        "0e8d:7632", "0e8d:7662", "2357:0137", "2c4e:0103"
+      ],
       "kernel_native": {"module": "mt76x2u", "min_kernel": "4.19", "recommended_kernel": "5.4"},
       "drivers": [
         {"method": "kernel_native", "module": "mt76x2u", "priority": 1}
@@ -280,7 +341,7 @@
       "injection_quality": "good",
       "notes": "Modern WiFi 6E chip with active-monitor support. In-kernel mt7921u since 5.18. ALFA AWUS036AXML, Brostrend AX9L.",
       "adapters": ["ALFA AWUS036AXML", "Brostrend AX9L", "Netgear A8000", "Panda PAU0F"],
-      "usb_ids": ["0e8d:7961", "0846:9060", "35bc:0107", "3625:010b"],
+      "usb_ids": ["0846:9060", "0846:9065", "0e8d:7902", "0e8d:7961", "3574:6211", "35bc:0107", "3625:010b"],
       "kernel_native": {"module": "mt7921u", "min_kernel": "5.18", "recommended_kernel": "6.1"},
       "drivers": [
         {"method": "kernel_native", "module": "mt7921u", "priority": 1}
@@ -298,7 +359,7 @@
       "injection_quality": "good",
       "notes": "Bleeding-edge WiFi 7. In-kernel mt7925u since 6.7 — needs a recent kernel. Active monitor supported.",
       "adapters": ["Netgear A9000", "Netgear A8500"],
-      "usb_ids": ["0846:9072", "0846:9050"],
+      "usb_ids": ["0846:9050", "0846:9072", "0e8d:6639", "0e8d:7925"],
       "kernel_native": {"module": "mt7925u", "min_kernel": "6.7", "recommended_kernel": "6.10"},
       "drivers": [
         {"method": "kernel_native", "module": "mt7925u", "priority": 1}
@@ -316,7 +377,11 @@
       "injection_quality": "fair",
       "notes": "Newer Realtek WiFi 6 USB chip. Mainline rtw89 support landed in kernel 6.17 (rtw89_8852bu); on older kernels use the morrownr DKMS driver. Monitor/injection maturing.",
       "adapters": ["ALFA AWUS036AXM", "Generic AX1800 USB"],
-      "usb_ids": ["0bda:b832", "0bda:b83b", "0bda:a85b"],
+      "usb_ids": [
+        "0586:3428", "0b05:1a62", "0b05:1cb6", "0bda:a85b", "0bda:b832", "0bda:b83a",
+        "0bda:b83b", "0bda:b852", "0bda:b85a", "0db0:6931", "0db0:f0c8", "2001:3327",
+        "3574:6121", "35bc:0100", "35bc:0108", "7392:6822"
+      ],
       "kernel_native": {"module": "rtw89_8852bu", "min_kernel": "6.17", "recommended_kernel": "6.18"},
       "drivers": [
         {"method": "dkms_git", "repo": "https://github.com/morrownr/rtl8852bu-20250826", "module": "8852bu", "priority": 1},
@@ -355,8 +420,20 @@
       "injection": true,
       "injection_quality": "fair",
       "notes": "Common in mid-range AC1200 dongles (TP-Link Archer T3U/T4U v3). The morrownr 88x2bu driver gives the most reliable monitor/injection; the Kali apt package is the easiest path.",
-      "adapters": ["TP-Link Archer T3U", "TP-Link Archer T4U v3", "Comfast CF-812AC", "ASUS USB-AC53 Nano", "D-Link DWA-182 D1", "Linksys WUSB3600 v2", "Netgear A6150", "TRENDnet TEW-808UBM", "Mercusys MA30H"],
-      "usb_ids": ["0bda:b812", "0bda:b81a", "0bda:b82c", "0bda:2102", "04ca:8602", "056e:4011", "0846:9055", "0b05:1841", "0b05:184c", "0b05:1870", "0b05:1874", "0b05:19aa", "0e66:0025", "13b1:0043", "13b1:0045", "2001:331c", "2001:331e", "2001:331f", "20f4:805a", "20f4:808a", "2357:0115", "2357:0116", "2357:0117", "2357:0125", "2357:012d", "2357:012e", "2357:0138", "2c4e:0107", "7392:b822", "7392:c822", "7392:d822", "7392:e822", "7392:f822"],
+      "adapters": [
+        "TP-Link Archer T3U", "TP-Link Archer T4U v3", "Comfast CF-812AC", "ASUS USB-AC53 Nano",
+        "D-Link DWA-182 D1", "Linksys WUSB3600 v2", "Netgear A6150", "TRENDnet TEW-808UBM",
+        "Mercusys MA30H"
+      ],
+      "usb_ids": [
+        "0411:03d0", "0411:03d1", "04ca:8602", "056e:4011", "0846:9055", "0b05:1841",
+        "0b05:184c", "0b05:1870", "0b05:1874", "0b05:19aa", "0bda:2102", "0bda:b812",
+        "0bda:b81a", "0bda:b82c", "0e66:0025", "13b1:0043", "13b1:0045", "2001:331c",
+        "2001:331e", "2001:331f", "2001:3322", "20f4:805a", "20f4:808a", "2357:0115",
+        "2357:0116", "2357:0117", "2357:0125", "2357:012d", "2357:012e", "2357:0138",
+        "2c4e:0107", "2c4e:010a", "7392:b822", "7392:c822", "7392:d822", "7392:e822",
+        "7392:f822"
+      ],
       "kernel_native": null,
       "drivers": [
         {"method": "apt", "package": "realtek-rtl88x2bu-dkms", "distro": ["kali", "parrot", "debian", "ubuntu"], "priority": 1},
@@ -376,7 +453,22 @@
       "injection_quality": "poor",
       "notes": "Extremely common legacy chip (Edimax EW-7811Un, TL-WN725N v2). The in-kernel rtl8xxxu driver gets you online, but monitor mode is flaky and injection is unreliable — fine for connectivity, not for serious attacks. Use an AR9271 or MT7612U for real work.",
       "adapters": ["Edimax EW-7811Un", "TP-Link TL-WN725N v2", "TP-Link TL-WN823N", "D-Link DWA-131"],
-      "usb_ids": ["0bda:8176", "0bda:8177", "0bda:8178", "0bda:817a", "0bda:817b", "0bda:817f", "0bda:818a", "7392:7811", "7392:7822", "050d:1102", "2001:3308", "2001:330b", "0846:9021"],
+      "usb_ids": [
+        "04bb:094c", "04bb:0950", "04f2:aff7", "04f2:aff8", "04f2:aff9", "04f2:affa",
+        "04f2:affb", "04f2:affc", "050d:1004", "050d:1102", "050d:11f2", "050d:2102",
+        "050d:2103", "0586:341f", "06f8:e033", "06f8:e035", "0789:016d", "07aa:0056",
+        "07b8:8178", "07b8:8189", "0846:9021", "0846:9041", "0846:9043", "0846:f001",
+        "0b05:17ab", "0b05:17ba", "0bda:018a", "0bda:1e1e", "0bda:2e2e", "0bda:317f",
+        "0bda:5088", "0bda:8170", "0bda:8176", "0bda:8177", "0bda:8178", "0bda:817a",
+        "0bda:817b", "0bda:817c", "0bda:817d", "0bda:817e", "0bda:817f", "0bda:8186",
+        "0bda:818a", "0bda:8191", "0bda:819a", "0bda:8754", "0df6:0052", "0df6:005c",
+        "0df6:0061", "0df6:0070", "0df6:0077", "0e66:0019", "0e66:0020", "0eb0:9071",
+        "103c:1629", "1058:0631", "13d3:3357", "13d3:3358", "13d3:3359", "2001:3307",
+        "2001:3308", "2001:3309", "2001:330a", "2001:330b", "2001:330d", "2019:1201",
+        "2019:4902", "2019:ab2a", "2019:ab2b", "2019:ab2e", "2019:ed17", "20f4:624d",
+        "20f4:648b", "2357:0100", "4855:0090", "4855:0091", "4856:0091", "7392:7811",
+        "7392:7822", "9846:9041", "cdab:8010"
+      ],
       "kernel_native": {"module": "rtl8xxxu", "min_kernel": "4.0", "recommended_kernel": "5.10"},
       "drivers": [
         {"method": "dkms_git", "repo": "https://github.com/pvaret/rtl8192cu-fixes", "module": "8192cu", "priority": 1},
@@ -395,7 +487,7 @@
       "injection_quality": "poor",
       "notes": "Budget WiFi+Bluetooth combo chip found in many cheap dongles and laptops. In-kernel rtl8xxxu provides connectivity; monitor/injection are unreliable. Included so AirDriver can still get you online.",
       "adapters": ["Generic WiFi+BT combo dongles", "various laptops"],
-      "usb_ids": ["0bda:b720", "0bda:b72a", "0bda:b728"],
+      "usb_ids": ["0bda:b720", "0bda:b728", "0bda:b72a", "7392:a611"],
       "kernel_native": {"module": "rtl8xxxu", "min_kernel": "4.3", "recommended_kernel": "5.10"},
       "drivers": [
         {"method": "dkms_git", "repo": "https://github.com/lwfinger/rtl8723bu", "module": "8723bu", "priority": 1},
@@ -414,7 +506,7 @@
       "injection_quality": "poor",
       "notes": "Newer budget 2.4 GHz chip (aka RTL8188GU) in cheap nano dongles. Many ship in USB CD-ROM/flip-storage mode (shown as 0bda:1a2b) and need usb-modeswitch before the Wi-Fi device (0bda:b711) appears. In-kernel support is immature; the lwfinger DKMS driver (module 8188gu) gives connectivity and monitor-mode sniffing, but injection is unreliable — connect-only, not attack-grade.",
       "adapters": ["Tenda W311MI", "Generic RTL8710BU / RTL8188GU nano dongles"],
-      "usb_ids": ["0bda:b711"],
+      "usb_ids": ["0bda:2005", "0bda:b711"],
       "kernel_native": null,
       "drivers": [
         {"method": "dkms_git", "repo": "https://github.com/lwfinger/rtl8188gu", "module": "8188gu", "priority": 1},
@@ -433,7 +525,11 @@
       "injection_quality": "poor",
       "notes": "Ultra-cheap single-band nano dongle, in-kernel mt7601u since 4.2 (needs the mt7601u.bin firmware blob). Monitor mode works for sniffing but the driver does not support packet injection — good for getting a box online, not for active attacks.",
       "adapters": ["Generic MT7601U nano dongles", "Ralink MT7601U"],
-      "usb_ids": ["148f:7601", "0e8d:7601", "148f:760a", "148f:760b"],
+      "usb_ids": [
+        "0b05:17d3", "0e8d:7601", "0e8d:760a", "0e8d:760b", "13d3:3431", "13d3:3434",
+        "148f:7601", "148f:760b", "148f:760c", "148f:760d", "2001:3d04", "2717:4106",
+        "2955:0001", "2955:1001", "2955:1003", "2a5f:1000", "7392:7710"
+      ],
       "kernel_native": {"module": "mt7601u", "min_kernel": "4.2", "recommended_kernel": "5.4", "firmware": "mt7601u.bin"},
       "drivers": [
         {"method": "kernel_native", "module": "mt7601u", "firmware_pkg": "firmware-misc-nonfree", "priority": 1}
@@ -451,7 +547,10 @@
       "injection_quality": "good",
       "notes": "Reliable old-school dual-band N chips, fully in-kernel via rt2800usb. The RT5572 powers the Panda PAU09 (N600) and ALFA AWUS052NH; the RT3572 powers the ALFA AWUS051NH v1. No build needed.",
       "adapters": ["ALFA AWUS051NH v1", "ALFA AWUS052NH", "Panda PAU09 (N600)", "D-Link DWA-160 B2"],
-      "usb_ids": ["148f:3572", "148f:5572", "0789:0168", "1740:9603", "0df6:0048", "083a:c522", "043e:7a32", "1737:0078", "0586:3416", "07d1:3c1a"],
+      "usb_ids": [
+        "043e:7a32", "0586:3416", "0789:0168", "07d1:3c1a", "083a:c522", "0df6:0048",
+        "148f:3572", "148f:5572", "1737:0078", "1740:9603"
+      ],
       "kernel_native": {"module": "rt2800usb", "min_kernel": "2.6.39", "recommended_kernel": "any"},
       "drivers": [
         {"method": "kernel_native", "module": "rt2800usb", "priority": 1}
@@ -468,8 +567,17 @@
       "injection": false,
       "injection_quality": "poor",
       "notes": "Legacy draft-N USB chip, in-kernel via carl9170 (needs the carl9170-1.fw firmware blob). Monitor mode works but injection support is weak — kept for completeness and older kits. Prefer AR9271 for 2.4 GHz injection.",
-      "adapters": ["TP-Link TL-WN821N v1/v2", "TP-Link TL-WN822N v1", "Netgear WNDA3100 v1", "D-Link DWA-160 A1/A2"],
-      "usb_ids": ["0cf3:9170", "0cf3:1001", "0cf3:1002", "0846:9010", "07d1:3c10", "0cde:0023", "1740:0605", "04bb:093f", "057c:8401", "057c:8402"],
+      "adapters": [
+        "TP-Link TL-WN821N v1/v2", "TP-Link TL-WN822N v1", "Netgear WNDA3100 v1",
+        "D-Link DWA-160 A1/A2"
+      ],
+      "usb_ids": [
+        "0409:0249", "0409:02b4", "04bb:093f", "057c:8401", "057c:8402", "0586:3417",
+        "07d1:3a09", "07d1:3a0f", "07d1:3c10", "083a:f522", "0846:9001", "0846:9010",
+        "0846:9040", "0ace:1221", "0cde:0023", "0cde:0026", "0cde:0027", "0cf3:1001",
+        "0cf3:1002", "0cf3:1010", "0cf3:1011", "0cf3:9170", "1435:0326", "1435:0804",
+        "1668:1200", "1740:0605", "1b75:9170", "2019:5304", "cace:0300"
+      ],
       "kernel_native": {"module": "carl9170", "min_kernel": "2.6.37", "recommended_kernel": "any", "firmware": "carl9170-1.fw"},
       "drivers": [
         {"method": "kernel_native", "module": "carl9170", "firmware_pkg": "firmware-linux-free", "priority": 1}
@@ -542,10 +650,119 @@
       "injection_quality": "poor",
       "notes": "Ubiquitous internal laptop cards. In-kernel iwlwifi (needs the firmware-iwlwifi blobs). Monitor mode works for sniffing, but Intel cards do NOT reliably support packet injection — use an external AR9271/MT7612U/RTL8812AU adapter for attacks.",
       "adapters": ["Intel AX200", "Intel AX201", "Intel AX210", "Intel AX211"],
-      "usb_ids": ["8086:2723", "8086:02f0", "8086:a0f0", "8086:2725", "8086:7af0", "8086:7e40", "8086:51f0"],
+      "usb_ids": ["8086:02f0", "8086:2723", "8086:2725", "8086:51f0", "8086:7af0", "8086:7e40", "8086:a0f0"],
       "kernel_native": {"module": "iwlwifi", "min_kernel": "5.2", "recommended_kernel": "6.1", "firmware": "iwlwifi-*.ucode"},
       "drivers": [
         {"method": "kernel_native", "module": "iwlwifi", "firmware_pkg": "firmware-iwlwifi", "priority": 1}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "rtl8723au",
+      "name": "Realtek RTL8723AU (WiFi + BT combo)",
+      "vendor": "Realtek",
+      "wifi": "WiFi 4 (802.11n)",
+      "band": "Single-band 2.4 GHz",
+      "monitor_mode": true,
+      "injection": false,
+      "injection_quality": "poor",
+      "notes": "Older WiFi+Bluetooth combo chip found in budget laptops and dongles. The in-kernel rtl8xxxu driver gets you online; monitor mode is limited and injection is not usable. Connect-only — pair it with an AR9271 or MT7612U for attack work.",
+      "adapters": ["Generic WiFi+BT combo dongles", "older laptops"],
+      "usb_ids": ["0bda:0724", "0bda:1724", "0bda:8724"],
+      "kernel_native": {"module": "rtl8xxxu", "min_kernel": "4.1", "recommended_kernel": "5.10"},
+      "drivers": [
+        {"method": "kernel_native", "module": "rtl8xxxu", "priority": 1}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "rtl8192fu",
+      "name": "Realtek RTL8192FU / RTL8188FU-variant",
+      "vendor": "Realtek",
+      "wifi": "WiFi 4 (802.11n)",
+      "band": "Single-band 2.4 GHz, 2x2",
+      "monitor_mode": true,
+      "injection": false,
+      "injection_quality": "poor",
+      "notes": "Newer budget 2.4 GHz Realtek USB chip. Mainline rtl8xxxu gained RTL8192FU support in kernel 6.2 — on older kernels the adapter will not work out of the box and needs the out-of-tree driver. Monitor mode works for sniffing; injection is unreliable.",
+      "adapters": ["Generic RTL8192FU dongles", "Tenda U10 / TP-Link variants"],
+      "usb_ids": ["0b05:18f1", "0bda:318b", "0bda:f192", "2001:3328", "2357:0135", "7392:b722"],
+      "kernel_native": {"module": "rtl8xxxu", "min_kernel": "6.2", "recommended_kernel": "6.6"},
+      "drivers": [
+        {"method": "kernel_native", "module": "rtl8xxxu", "priority": 1},
+        {"method": "dkms_git", "repo": "https://github.com/kelebek333/rtl8192fu-dkms", "module": "rtl8192fu", "priority": 2}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "rt2800usb_other",
+      "name": "Ralink/MediaTek RT2800-series (other adapters)",
+      "vendor": "Ralink / MediaTek",
+      "wifi": "WiFi 4 (802.11n)",
+      "band": "2.4 GHz (some models dual-band)",
+      "monitor_mode": true,
+      "injection": true,
+      "injection_quality": "good",
+      "notes": "Catch-all for the several hundred rebadged adapters the in-kernel rt2800usb driver supports (RT2770/RT2870/RT3070/RT3071/RT3072/RT35xx/RT53xx/RT55xx silicon under many brand names). No build needed — the driver ships with the kernel, and monitor mode plus injection generally work well. Exact capability varies with the specific chip and its EEPROM/firmware; the popular RT3070, RT5370 and RT3572/RT5572 adapters have their own, better-characterised entries above. IDs come straight from the kernel's rt2800usb device table.",
+      "adapters": ["Many rebadged RT2800-series USB adapters"],
+      "usb_ids": [
+        "0411:00e8", "0411:012e", "0411:0148", "0411:0150", "0411:0158", "0411:015d",
+        "0411:016f", "0411:01a2", "0411:01a8", "0411:01ee", "0411:01fd", "0411:0241",
+        "0411:0253", "043e:7a12", "043e:7a13", "043e:7a22", "043e:7a42", "0471:200f",
+        "0471:20dd", "0471:2104", "0471:2180", "0471:2181", "0471:2182", "04bb:0944",
+        "04bb:0945", "04bb:0947", "04bb:0948", "04bb:094b", "04bb:094e", "04da:1800",
+        "04da:1801", "04da:23f6", "04e8:2018", "050d:1003", "050d:1103", "050d:8053",
+        "050d:805c", "050d:815c", "050d:825a", "050d:825b", "050d:935a", "050d:935b",
+        "050d:945b", "057c:8501", "0586:3418", "0586:341a", "0586:341e", "0586:3421",
+        "0586:343e", "05a6:0101", "06f8:e036", "0789:0162", "0789:0163", "0789:0164",
+        "0789:0166", "0789:0169", "0789:016b", "0789:0170", "07aa:002f", "07aa:003c",
+        "07aa:003f", "07aa:0041", "07aa:0042", "07b8:2770", "07b8:2870", "07b8:3071",
+        "07b8:3072", "07b8:3073", "07b8:3074", "07d1:3c09", "07d1:3c0a", "07d1:3c0b",
+        "07d1:3c0d", "07d1:3c0e", "07d1:3c0f", "07d1:3c11", "07d1:3c13", "07d1:3c15",
+        "07d1:3c16", "07d1:3c17", "07fa:7712", "083a:6618", "083a:7511", "083a:7522",
+        "083a:8522", "083a:a512", "083a:a618", "083a:a701", "083a:a702", "083a:a703",
+        "083a:b511", "083a:b512", "083a:b522", "083a:d522", "083a:f511", "0846:9012",
+        "0846:9013", "0846:9019", "08b9:1197", "0930:0a07", "0b05:166a", "0b05:1731",
+        "0b05:1732", "0b05:1742", "0b05:1760", "0b05:1761", "0b05:1784", "0b05:1790",
+        "0b05:179d", "0b05:17a7", "0b05:17ad", "0b05:17bc", "0b05:17e8", "0cde:0022",
+        "0cde:0025", "0db0:3820", "0db0:3821", "0db0:3822", "0db0:3870", "0db0:3871",
+        "0db0:6899", "0db0:821a", "0db0:822a", "0db0:822b", "0db0:822c", "0db0:870a",
+        "0db0:871a", "0db0:871b", "0db0:871c", "0db0:899a", "0df6:0017", "0df6:002b",
+        "0df6:002c", "0df6:002d", "0df6:0039", "0df6:003b", "0df6:003c", "0df6:003d",
+        "0df6:003e", "0df6:003f", "0df6:0040", "0df6:0041", "0df6:0042", "0df6:0047",
+        "0df6:004a", "0df6:004d", "0df6:0050", "0df6:0051", "0df6:0053", "0df6:005f",
+        "0df6:0060", "0df6:0062", "0df6:0065", "0df6:0066", "0df6:0067", "0df6:0068",
+        "0df6:0069", "0df6:006a", "0df6:006e", "0df6:006f", "0df6:0078", "0e0b:9031",
+        "0e0b:9041", "0e66:0001", "0e66:0003", "0e66:0009", "0e66:000b", "0e66:0013",
+        "0e66:0017", "0e66:0018", "0e66:0021", "0fe9:b307", "100d:9031", "100d:9032",
+        "1044:800b", "1044:800c", "1044:800d", "129b:1828", "13b1:002f", "13b1:0031",
+        "13b1:003b", "13d3:3247", "13d3:3262", "13d3:3273", "13d3:3284", "13d3:3305",
+        "13d3:3307", "13d3:3321", "13d3:3322", "13d3:3329", "13d3:3340", "13d3:3365",
+        "13d3:3399", "13d3:3400", "13d3:3401", "1482:3c09", "148f:2070", "148f:3370",
+        "148f:3573", "148f:8070", "148f:f101", "148f:f301", "14b2:3c06", "14b2:3c07",
+        "14b2:3c08", "14b2:3c09", "14b2:3c11", "14b2:3c12", "14b2:3c23", "14b2:3c25",
+        "14b2:3c27", "14b2:3c28", "14b2:3c2c", "157e:300e", "157e:3013", "15a9:0006",
+        "15a9:0010", "15a9:0012", "15c5:0008", "167b:4001", "1690:0740", "1690:0744",
+        "1690:0761", "1690:0764", "1737:0070", "1737:0071", "1737:0079", "1740:0600",
+        "1740:0602", "1740:0615", "1740:9701", "1740:9702", "1740:9703", "1740:9705",
+        "1740:9706", "1740:9707", "1740:9708", "1740:9709", "1740:9801", "1761:0b05",
+        "177f:0153", "177f:0163", "177f:0164", "177f:0165", "177f:0254", "177f:0302",
+        "177f:0313", "177f:0323", "177f:0324", "177f:1163", "18c5:0008", "18c5:0012",
+        "18e8:6259", "1a32:0304", "1b75:3070", "1b75:3071", "1b75:3072", "1b75:7733",
+        "1b75:a200", "1d4d:0002", "1d4d:000c", "1d4d:000e", "1d4d:0010", "1d4d:0011",
+        "1eda:2012", "1eda:2210", "1eda:2310", "2001:3317", "2001:3c15", "2001:3c17",
+        "2001:3c19", "2001:3c1a", "2001:3c1b", "2001:3c1c", "2001:3c1d", "2001:3c1e",
+        "2001:3c1f", "2001:3c20", "2001:3c21", "2001:3c22", "2001:3c23", "2001:3c25",
+        "2019:5201", "2019:ab24", "2019:ab25", "2019:ab29", "2019:ed06", "2019:ed14",
+        "2019:ed19", "203d:1480", "203d:14a1", "203d:14a9", "20b8:8888", "20f4:724a",
+        "5a57:0280", "5a57:0282", "5a57:0283", "5a57:0284", "5a57:5257", "7392:4085",
+        "7392:7711", "7392:7717", "7392:7718", "7392:7722", "7392:7733", "8516:2070",
+        "8516:2770", "8516:2870", "8516:3070", "8516:3071", "8516:3072", "8516:3572",
+        "f201:5370"
+      ],
+      "kernel_native": {"module": "rt2800usb", "min_kernel": "2.6.31", "recommended_kernel": "any"},
+      "drivers": [
+        {"method": "kernel_native", "module": "rt2800usb", "priority": 1}
       ],
       "blacklist": []
     }

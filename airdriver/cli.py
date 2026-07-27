@@ -9,6 +9,14 @@ so it works over SSH on a headless box.
     airdriver monitor status  # show each interface's mode (also: start/stop/test)
     airdriver report          # write a diagnostic report
     airdriver db [--check]    # dump / validate the chipset database (--json too)
+
+  Driver management (the lifecycle around an install):
+
+    airdriver status          # what's installed, and is it built for this kernel?
+    airdriver rebuild         # rebuild DKMS after a kernel upgrade (Wi-Fi came back)
+    airdriver sign            # sign modules so Secure Boot loads them
+    airdriver modeswitch      # kick a 'driver CD-ROM' dongle into Wi-Fi mode
+    airdriver recommend       # which adapter should I actually use?
 """
 
 from __future__ import annotations
@@ -17,7 +25,8 @@ import argparse
 import sys
 
 from . import __version__, __codename__
-from .core import detector, diagnose, monitor as mon, report as rep, system, verify
+from .core import (detector, diagnose, manage, monitor as mon, report as rep,
+                   system, verify)
 from .core.chipset_db import ChipsetDB
 from .core.installer import Executor, build_plan, build_remove_plan, select_driver
 
@@ -369,6 +378,152 @@ def cmd_diagnose(args, db: ChipsetDB) -> int:
     return 0
 
 
+def cmd_status(args, db: ChipsetDB) -> int:
+    """The driver-management dashboard: what's installed, for which kernel."""
+    info = system.gather()
+    st = manage.status(db, info)
+    if getattr(args, "json", False):
+        import json
+        from dataclasses import asdict
+        print(json.dumps({
+            "kernel": st.kernel, "other_kernels": st.other_kernels,
+            "secure_boot": st.secure_boot, "signing_key": st.signing_key,
+            "healthy": st.healthy,
+            "drivers": [{"name": d.dkms.name, "version": d.dkms.version,
+                         "kernels": d.dkms.kernels, "loaded": d.loaded,
+                         "built_for_running_kernel": d.ok_for_running_kernel,
+                         "chipsets": d.chipsets} for d in st.drivers],
+            "messages": st.messages}, indent=2))
+        return 0 if st.healthy else 2
+    print(bold("\nInstalled driver status\n"))
+    print(manage.describe_status(st))
+    print()
+    if st.healthy and st.drivers:
+        print(green("✓ All DKMS drivers are built for the kernel you're running."))
+    elif st.stale:
+        print(yellow(f"! {len(st.stale)} driver(s) need rebuilding — run: sudo airdriver rebuild"))
+    return 0 if st.healthy else 2
+
+
+def cmd_rebuild(args, db: ChipsetDB) -> int:
+    """Rebuild DKMS modules for the running kernel (post kernel-upgrade fix)."""
+    info = system.gather()
+    if not info.is_linux:
+        print(yellow("Rebuilding only means something on Linux."))
+        return 1
+    st = manage.status(db, info)
+    if not st.drivers and not args.yes:
+        print(yellow("No DKMS drivers are registered — nothing to rebuild."))
+        return 0
+    if st.healthy and st.drivers and not args.force:
+        print(green(f"✓ Every DKMS driver is already built for {info.kernel_release}."))
+        print(dim("  Use --force to rebuild anyway."))
+        return 0
+    plan = manage.build_rebuild_plan(info, only=args.target)
+    print(plan.describe())
+    if args.dry_run:
+        print(yellow("\n(dry run — nothing executed)"))
+        return 0
+    if not args.yes:
+        if input(bold("\nRebuild now? [y/N] ")).strip().lower() not in ("y", "yes"):
+            print("Aborted.")
+            return 1
+    ok = Executor(info).run(plan, log=print)
+    print(bold("\n── Status after rebuild ─────────────────────"))
+    print(manage.describe_status(manage.status(db, info)))
+    return 0 if ok else 2
+
+
+def cmd_sign(args, db: ChipsetDB) -> int:
+    """Sign DKMS modules so Secure Boot will load them."""
+    info = system.gather()
+    if not info.is_linux:
+        print(yellow("Module signing only applies on Linux."))
+        return 1
+    if info.secure_boot == "off" and not args.force:
+        print(green("Secure Boot is OFF — your modules load unsigned, nothing to do."))
+        print(dim("  Use --force to sign anyway (harmless)."))
+        return 0
+    mods = manage.modules_to_sign(db, info.kernel_release)
+    print(bold(f"\nSecure Boot module signing — kernel {info.kernel_release}\n"))
+    if mods:
+        print(f"  {len(mods)} module(s) to sign:")
+        for m in mods[:12]:
+            print(dim(f"    {m}"))
+    else:
+        print(yellow("  No DKMS modules found for this kernel yet — install a driver "
+                     "first (airdriver install), then run sign again."))
+    plan = manage.build_sign_plan(info)
+    print()
+    print(plan.describe())
+    if args.dry_run:
+        print(yellow("\n(dry run — nothing executed)"))
+        return 0
+    if not args.yes:
+        if input(bold("\nGenerate key and sign? [y/N] ")).strip().lower() not in ("y", "yes"):
+            print("Aborted.")
+            return 1
+    ok = Executor(info).run(plan, log=print)
+    print(bold(cyan("\n── One manual step remains ──────────────────")))
+    print(f"""
+  1. Enroll the key (pick any one-time password when prompted):
+
+       sudo mokutil --import {manage.MOK_CRT}
+
+  2. Reboot. A blue 'MOK Manager' screen appears:
+       Enroll MOK  ->  Continue  ->  Yes  ->  enter that password
+
+  3. After booting, confirm the driver loads:
+
+       airdriver verify
+""")
+    return 0 if ok else 2
+
+
+def cmd_modeswitch(args, db: ChipsetDB) -> int:
+    """Kick a 'driver CD-ROM' adapter into Wi-Fi mode."""
+    info = system.gather()
+    adapters = detector.detect(db)
+    found = manage.storage_mode_devices(adapters)
+    target = args.target
+    if not target:
+        if not found:
+            print(green("No adapters are sitting in driver-CD (storage) mode."))
+            print(dim("  If a dongle shows up as a CD drive, pass its id: "
+                      "airdriver modeswitch 0bda:1a2b"))
+            return 0
+        print(bold("\nAdapters in storage mode:\n"))
+        for uid, desc in found:
+            print(f"  {yellow(uid)}  {desc}")
+        target = found[0][0]
+        print(dim(f"\nSwitching the first one ({target})…\n"))
+    plan = manage.build_modeswitch_plan(target)
+    print(plan.describe())
+    if args.dry_run:
+        print(yellow("\n(dry run — nothing executed)"))
+        return 0
+    ok = Executor(info).run(plan, log=print)
+    print(green("\nNow run:  airdriver scan") if ok else yellow("\nFinished with warnings."))
+    return 0 if ok else 2
+
+
+def cmd_recommend(args, db: ChipsetDB) -> int:
+    """Which adapter should I actually use/buy?"""
+    picks = manage.recommend(db, band=args.band, need_injection=not args.no_injection)
+    print(bold("\nBest adapters for monitor mode + injection\n"))
+    if args.band:
+        print(dim(f"  filtered to {args.band} GHz\n"))
+    for i, c in enumerate(picks, 1):
+        native = (c.drivers and c.drivers[0].method == "kernel_native")
+        tag = green("in-kernel, no build") if native else yellow("needs a driver build")
+        print(f"  {bold(str(i)+'.')} {bold(c.name)}  {dim('('+c.injection_quality+' injection)')}")
+        print(f"      {c.band}  ·  {tag}")
+        if c.adapters:
+            print(dim(f"      e.g. {', '.join(c.adapters[:3])}"))
+    print(dim("\n  'in-kernel' adapters just work on a modern kernel — the safest buy."))
+    return 0
+
+
 def cmd_gui(args, db: ChipsetDB) -> int:
     try:
         from .gui.app import run as run_gui
@@ -426,6 +581,32 @@ def build_parser() -> argparse.ArgumentParser:
 
     pdg = sub.add_parser("diagnose", help="Full diagnostic snapshot to share when stuck")
     pdg.add_argument("--save", action="store_true", help="Also write it to a .txt file")
+
+    # --- driver management ------------------------------------------------ #
+    pst = sub.add_parser("status", help="What drivers are installed, and are they built "
+                                        "for the kernel you're running?")
+    pst.add_argument("--json", action="store_true", help="Machine-readable output")
+
+    prb = sub.add_parser("rebuild", help="Rebuild DKMS drivers for the running kernel "
+                                         "(fixes Wi-Fi after a kernel upgrade)")
+    prb.add_argument("target", nargs="?", help="DKMS module name (default: all)")
+    prb.add_argument("--dry-run", action="store_true", help="Show the plan, change nothing")
+    prb.add_argument("--yes", "-y", action="store_true", help="Don't prompt")
+    prb.add_argument("--force", action="store_true", help="Rebuild even if nothing looks stale")
+
+    psg = sub.add_parser("sign", help="Sign DKMS modules so Secure Boot will load them")
+    psg.add_argument("--dry-run", action="store_true", help="Show the plan, change nothing")
+    psg.add_argument("--yes", "-y", action="store_true", help="Don't prompt")
+    psg.add_argument("--force", action="store_true", help="Sign even if Secure Boot is off")
+
+    pms = sub.add_parser("modeswitch", help="Kick a 'driver CD-ROM' dongle into Wi-Fi mode")
+    pms.add_argument("target", nargs="?", help="usb id (default: the detected one)")
+    pms.add_argument("--dry-run", action="store_true", help="Show the plan, change nothing")
+
+    prc = sub.add_parser("recommend", help="Which adapter should I use for pentesting?")
+    prc.add_argument("--band", choices=["2.4", "5"], help="Only adapters covering this band")
+    prc.add_argument("--no-injection", action="store_true",
+                     help="Include monitor-only adapters (no injection needed)")
     return p
 
 
@@ -433,7 +614,8 @@ _DISPATCH = {
     "scan": cmd_scan, "doctor": cmd_doctor, "info": cmd_info, "install": cmd_install,
     "monitor": cmd_monitor, "report": cmd_report, "db": cmd_db, "gui": cmd_gui,
     "verify": cmd_verify, "remove": cmd_remove, "fix": cmd_fix,
-    "diagnose": cmd_diagnose,
+    "diagnose": cmd_diagnose, "status": cmd_status, "rebuild": cmd_rebuild,
+    "sign": cmd_sign, "modeswitch": cmd_modeswitch, "recommend": cmd_recommend,
 }
 
 

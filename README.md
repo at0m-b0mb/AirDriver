@@ -7,14 +7,18 @@
 [![Platform](https://img.shields.io/badge/platform-Kali%20%7C%20Parrot%20%7C%20Debian-1f9e72?style=flat-square)](https://www.kali.org/)
 [![Python](https://img.shields.io/badge/python-3.9%2B-2ee6a6?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![GUI](https://img.shields.io/badge/GUI-PySide6-38bdf8?style=flat-square&logo=qt&logoColor=white)](https://doc.qt.io/qtforpython/)
-[![Chipsets](https://img.shields.io/badge/chipsets-29%20families%20%C2%B7%20218%20IDs-f5a623?style=flat-square)](airdriver/data/chipsets.json)
+[![Chipsets](https://img.shields.io/badge/chipsets-32%20families%20%C2%B7%20759%20IDs-f5a623?style=flat-square)](airdriver/data/chipsets.json)
 [![CI](https://img.shields.io/github/actions/workflow/status/at0m-b0mb/AirDriver/ci.yml?branch=main&style=flat-square&label=tests)](../../actions)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 
 **Plug in your adapter → AirDriver identifies the chipset → installs the right driver.**
 
 Built for pentesters who just want monitor mode and packet injection to *work*.
-`Realtek` · `Atheros` · `MediaTek/Ralink` · `Intel` — **29 chipset families · 218 USB/PCI IDs** · hybrid online/offline · a clean GUI **and** a full CLI.
+`Realtek` · `Atheros` · `MediaTek/Ralink` · `Intel` — **32 chipset families · 759 USB/PCI IDs** · hybrid online/offline · a clean GUI **and** a full CLI.
+
+Not just an installer: AirDriver **manages** your drivers — it rebuilds them when a kernel
+upgrade breaks Wi-Fi, signs them for Secure Boot, and tells you honestly whether a card
+can really inject.
 
 </div>
 
@@ -74,6 +78,14 @@ them on an air-gapped machine.
 - 📡 **Brings it online** — after loading the module it unblocks `rfkill`, brings the
   interface up, and nudges NetworkManager, so a clean build is a *working* adapter and
   not just a loaded module.
+- 🔧 **Survives kernel upgrades** — the #1 way Wi-Fi "randomly breaks" on Kali: you upgrade,
+  reboot, and the out-of-tree module was never built for the new kernel. `airdriver status`
+  spots it instantly and `airdriver rebuild` fixes it in one command.
+- 🔐 **Secure Boot signing** — `airdriver sign` generates a MOK key, signs every built module
+  (handling compressed `.ko.xz`/`.zst` correctly), and hands you the one step that needs your
+  own password: enrolling the key.
+- 💿 **Flip-storage dongles** — many cheap adapters boot as a fake CD-ROM full of Windows
+  drivers and never appear as Wi-Fi. AirDriver spots them and `airdriver modeswitch` ejects it.
 - 🧹 **Remove & fix** — `airdriver remove` cleanly wipes a half-broken driver for a fresh
   retry; `airdriver fix` reloads it (depmod + modprobe); both surface the relevant `dmesg`.
 - 🩺 **One-shot `diagnose`** — `airdriver diagnose` prints (and copies) a complete snapshot
@@ -87,8 +99,10 @@ them on an air-gapped machine.
   adapters meant for the out-of-tree driver.
 - 📶 **Monitor mode + injection** — enable/disable monitor mode and run an `aireplay-ng`
   injection self-test right from the GUI (or `airdriver monitor status/start/stop/test`).
-- 📚 **Searchable chipset browser** — the GUI's **📚 Chipsets** panel filters all 29 families
-  and 218 IDs by name, vendor, band, or `vid:pid` so you can check a card before you buy.
+- 📚 **Searchable chipset browser** — the GUI's **📚 Chipsets** panel filters all 32 families
+  and 759 IDs by name, vendor, band, or `vid:pid` so you can check a card before you buy.
+- 🛒 **Buying advice** — `airdriver recommend` ranks the chipsets that genuinely do monitor
+  mode *and* injection, preferring ones that need no driver build at all.
 - 🤖 **Scriptable** — `airdriver scan --json` and `airdriver db --json` emit machine-readable
   output; `airdriver db --check` validates the database (and runs in CI on every commit).
 - 🎯 **Honest capabilities** — every chipset is flagged for monitor mode **and** real
@@ -112,6 +126,12 @@ them on an air-gapped machine.
 **Unknown adapter?** Identify it from the dropdown and preview the full install plan before anything runs:
 
 <img src="docs/screenshots/gui-install-plan.png" alt="AirDriver identify + install plan" width="900">
+
+<br/><br/>
+
+**Know before you buy** — search all 32 chipset families and 759 USB/PCI IDs, with honest monitor/injection flags:
+
+<img src="docs/screenshots/gui-chipsets.png" alt="AirDriver chipset browser" width="900">
 
 </div>
 
@@ -207,6 +227,24 @@ airdriver db                    # dump the chipset database
 airdriver db --check            # validate the database (exit non-zero on conflicts)
 ```
 
+### Driver management
+
+```bash
+airdriver status                # what's installed — and is it built for THIS kernel?
+airdriver rebuild               # rebuild DKMS drivers after a kernel upgrade
+airdriver sign                  # sign modules so Secure Boot will load them
+airdriver modeswitch            # kick a "driver CD-ROM" dongle into WiFi mode
+airdriver recommend --band 5    # which adapter should I actually buy/use?
+```
+
+**Wi-Fi died after `apt full-upgrade`?** That's a stale DKMS module, and it's a
+two-command fix:
+
+```bash
+airdriver status                # shows "NOT built — stale" against the new kernel
+sudo airdriver rebuild          # rebuilds, reloads, and re-checks
+```
+
 Every install ends with a **verification report** — it confirms the module is built,
 loaded, and bound to your adapter, or tells you precisely what to fix.
 
@@ -251,6 +289,29 @@ it's still dead):
   DKMS builds for the wrong kernel. `sudo apt update && sudo apt full-upgrade`, **reboot**,
   then `airdriver remove <chipset> && airdriver install <chipset>`.
 
+**Wi-Fi worked yesterday, then I updated the system and it's gone.**
+Your kernel changed and the out-of-tree module wasn't rebuilt for the new one:
+```bash
+airdriver status              # "NOT built — stale" against the running kernel
+sudo airdriver rebuild        # rebuild, reload, re-check
+```
+If the rebuild can't find matching headers, you're running an *older* kernel than the one
+installed — reboot into the newest kernel first, then rebuild.
+
+**My new dongle shows up as a CD drive / "Windows driver" disk, not Wi-Fi.**
+It's in flip-storage mode and must be ejected before the radio appears:
+```bash
+sudo airdriver modeswitch     # detects it, or pass the id: ... modeswitch 0bda:1a2b
+airdriver scan                # it comes back with a DIFFERENT usb id
+```
+
+**Secure Boot keeps refusing my freshly built driver.**
+```bash
+sudo airdriver sign                                  # makes a key + signs the modules
+sudo mokutil --import /var/lib/airdriver/MOK.der     # you pick a one-time password
+sudo reboot                                          # blue screen → Enroll MOK → Continue
+```
+
 **`airdriver: command not found` after installing.**
 The launcher went to `~/.local/bin` (non-root install). Add it to your PATH:
 ```bash
@@ -273,9 +334,14 @@ with the `VID:PID` so it can be added to the database.
 
 ## Supported chipsets
 
-AirDriver knows **29 chipset families** spanning **218 USB/PCI IDs**. Capabilities are
+AirDriver knows **32 chipset families** spanning **759 USB/PCI IDs**. Capabilities are
 honest — some chips connect fine but can't inject, and AirDriver tells you up front.
 (Run `airdriver db` for the full list, or the **📚 Chipsets** browser in the GUI.)
+
+> **Where the IDs come from.** Every `vid:pid` is taken from the Linux kernel's own driver
+> device tables (`rtl8xxxu`, `rt2800usb`, `ath9k_htc`, `carl9170`, `mt76*`, `rtw88`/`rtw89`,
+> `rtl8187`) and, for out-of-tree drivers, the maintainers' `supported-device-IDs` lists.
+> None are guessed — a wrong id installs the wrong driver.
 
 ### 🏆 Attack-grade — reliable monitor mode + injection
 
@@ -289,6 +355,7 @@ honest — some chips connect fine but can't inject, and AirDriver tells you up 
 | **AR7010** | Alfa AWUS051NH v2 | 2.4+5 N | good | in-kernel + firmware |
 | **RT3070 / RT5370** | Alfa AWUS036NH, Panda PAU06 | 2.4 N | good | in-kernel (rt2800usb) |
 | **RT3572 / RT5572** | Alfa AWUS051NH/052NH, Panda PAU09 | 2.4+5 N | good | in-kernel (rt2800usb) |
+| **RT2800-series (other)** | 300+ rebadged RT2870/307x/35xx/53xx/55xx sticks | 2.4 (some 5) | good | in-kernel (rt2800usb) |
 | **MT7610U** | Alfa AWUS036ACHM | 2.4+5 AC600 | good | in-kernel (4.19+) |
 | **MT7921AU** | Alfa AWUS036AXML, Brostrend AX9L | WiFi 6E | good | in-kernel (5.18+) |
 | **MT7925U** | Netgear A9000 | WiFi 7 | good | in-kernel (6.7+) |
@@ -313,6 +380,8 @@ honest — some chips connect fine but can't inject, and AirDriver tells you up 
 | RTL8723BU | WiFi+BT combo dongles — connectivity only |
 | RTL8188FU | cheap mini dongles — limited monitor |
 | RTL8710BU / RTL8188GU | newer budget nano (Tenda W311MI) — often ships in CD-ROM mode; monitor sniffing only |
+| RTL8723AU | older WiFi+BT combo — connectivity only |
+| RTL8192FU | newer budget 2.4 GHz — needs kernel **6.2+** for the in-kernel driver |
 | MT7601U | ultra-cheap nano — monitor sniffing only, **no injection** |
 | AR9170 (carl9170) | legacy draft-N — weak injection |
 
@@ -406,7 +475,8 @@ AirDriver/
 │   ├── core/            # detection, database, system probes, install engine
 │   │   ├── chipset_db.py    detector.py   system.py    verify.py
 │   │   ├── installer.py     monitor.py    modules.py   report.py
-│   ├── data/chipsets.json   # the chipset → driver database (29 families)
+│   │   └── manage.py        # status · rebuild · sign · modeswitch · recommend
+│   ├── data/chipsets.json   # the chipset → driver database (32 families)
 │   ├── data/drivers/        # offline driver bundle (populated by script)
 │   ├── gui/             # PySide6 app (theme, main window)
 │   └── cli.py           # full-featured command line
@@ -420,17 +490,15 @@ AirDriver/
 
 ## Roadmap ideas
 
-- MOK signing helper for Secure Boot systems
 - Per-adapter TX-power / regulatory region tweaks
-- `usb_modeswitch` helper for CD-ROM-mode dongles (e.g. RTL8710BU)
 - Bootable USB persistence profile
 - AppImage / `.deb` packaging
+- Community VID:PID submission flow for genuinely unknown adapters
 
-Recently shipped in **v0.3.0 "Full Spectrum"**: 29 chipset families / 218 IDs (with the
-AU/CU/BU IDs corrected against the maintainer lists), automatic apt→source fallback
-installs, an in-GUI monitor-mode/injection panel and searchable chipset browser,
-`--json` output, a database validator, and a test-suite + CI. See the
-[CHANGELOG](CHANGELOG.md).
+Recently shipped in **v0.4.0 "Field Kit"**: driver *management* — `status`, `rebuild`
+(kernel-upgrade repair), `sign` (Secure Boot), `modeswitch`, `recommend` — plus the chipset
+database grown to **32 families / 759 IDs** straight from the kernel's own device tables.
+See the [CHANGELOG](CHANGELOG.md).
 
 ## License
 
