@@ -478,7 +478,7 @@ class Executor:
         log(f"=== AirDriver {plan.method}: {target} ===")
         log(plan.summary)
         for w in plan.warnings:
-            log(f"  ⚠ {w}")
+            log(f"  [!] {w}")
         if self.dry_run:
             log("\n[DRY RUN] Nothing will be executed. Plan:\n")
             log(plan.describe())
@@ -498,10 +498,10 @@ class Executor:
                         log(f"  ✗ step failed (exit {rc}) — aborting.")
                         return False
                     if rc != 0:
-                        log(f"  ⚠ optional step returned {rc}, continuing.")
+                        log(f"  [!] optional step returned {rc}, continuing.")
             except Exception as exc:  # noqa: BLE001 — surface any failure to the log
                 if step.optional:
-                    log(f"  ⚠ {exc} (optional, continuing)")
+                    log(f"  [!] {exc} (optional, continuing)")
                 else:
                     log(f"  ✗ {exc}")
                     return False

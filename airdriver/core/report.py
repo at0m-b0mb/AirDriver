@@ -62,7 +62,7 @@ def to_markdown(rep: dict) -> str:
         f"- Internet: {'✓' if s.get('has_internet') else '✗'} · Root: {'✓' if s.get('is_root') else '✗'}",
     ]
     if rep["blockers"]:
-        lines += ["", "## ⚠ Blockers"] + [f"- {b}" for b in rep["blockers"]]
+        lines += ["", "## Blockers"] + [f"- {b}" for b in rep["blockers"]]
     lines += ["", "## Adapters"]
     if not rep["adapters"]:
         lines.append("- None detected.")

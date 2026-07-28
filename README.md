@@ -10,6 +10,7 @@
 [![Chipsets](https://img.shields.io/badge/chipsets-32%20families%20%C2%B7%20759%20IDs-f5a623?style=flat-square)](airdriver/data/chipsets.json)
 [![CI](https://img.shields.io/github/actions/workflow/status/at0m-b0mb/AirDriver/ci.yml?branch=main&style=flat-square&label=tests)](../../actions)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-2ee6a6?style=flat-square)](CONTRIBUTING.md)
 
 **Plug in your adapter → AirDriver identifies the chipset → installs the right driver.**
 
@@ -99,7 +100,7 @@ them on an air-gapped machine.
   adapters meant for the out-of-tree driver.
 - 📶 **Monitor mode + injection** — enable/disable monitor mode and run an `aireplay-ng`
   injection self-test right from the GUI (or `airdriver monitor status/start/stop/test`).
-- 📚 **Searchable chipset browser** — the GUI's **📚 Chipsets** panel filters all 32 families
+- 📚 **Searchable chipset browser** — the GUI's **Chipsets** panel filters all 32 families
   and 759 IDs by name, vendor, band, or `vid:pid` so you can check a card before you buy.
 - 🛒 **Buying advice** — `airdriver recommend` ranks the chipsets that genuinely do monitor
   mode *and* injection, preferring ones that need no driver build at all.
@@ -110,8 +111,11 @@ them on an air-gapped machine.
   connect-only.
 - 🖥️ **Polished GUI** (PySide6) **and** a complete **CLI** for headless/SSH boxes.
 - 📄 **Diagnostic reports** — export JSON + Markdown, perfect for forum help threads.
-- ❓ **Unknown-adapter flow** — if your `VID:PID` isn't known yet, pick the closest
-  chipset to try and get a reminder to report it.
+- ❓ **Unknown-adapter flow** — if your `VID:PID` isn't known yet, pick the closest chipset
+  to try, then hit **Report this adapter** (or `airdriver contribute`) and AirDriver writes
+  the whole bug report for you — `lsusb`, kernel, `dmesg` and all.
+- 🖌️ **Renders on a bare box** — every icon is drawn with QPainter, not emoji, so the UI
+  looks right on a minimal Kali install with no emoji font installed.
 
 ## Screenshots
 
@@ -123,7 +127,7 @@ them on an air-gapped machine.
 
 <br/><br/>
 
-**Unknown adapter?** Identify it from the dropdown and preview the full install plan before anything runs:
+**Unknown adapter?** Identify it from the dropdown, preview the full install plan before anything runs — and **Report this adapter** to get it added to the database:
 
 <img src="docs/screenshots/gui-install-plan.png" alt="AirDriver identify + install plan" width="900">
 
@@ -235,6 +239,7 @@ airdriver rebuild               # rebuild DKMS drivers after a kernel upgrade
 airdriver sign                  # sign modules so Secure Boot will load them
 airdriver modeswitch            # kick a "driver CD-ROM" dongle into WiFi mode
 airdriver recommend --band 5    # which adapter should I actually buy/use?
+airdriver contribute            # report an unknown adapter to the project
 ```
 
 **Wi-Fi died after `apt full-upgrade`?** That's a stale DKMS module, and it's a
@@ -418,6 +423,25 @@ behind your kernel), the same step **falls back to compiling the maintainer's dr
 from git** automatically — installing the build prerequisites on the fly — so a single
 "Install" still ends in a working driver.
 
+## Adapter not recognised? Report it in 30 seconds
+
+The database only covers what people send back. If your adapter is unknown — or matched
+to the wrong chipset — AirDriver writes the whole report for you:
+
+```bash
+airdriver contribute            # prints the report + a pre-filled issue link
+airdriver contribute --open     # …and opens it in your browser
+```
+
+It collects the `vid:pid`, `lsusb` descriptors, your kernel and distro, and the matching
+`dmesg` lines. In the GUI, select the adapter and press **Report this adapter**.
+
+> **Nothing is sent automatically.** The report describes your machine, so AirDriver shows
+> it to you and pre-fills the form — you decide whether to submit.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for adding a chipset yourself. It's one JSON file
+and no code changes.
+
 ## Adding a chipset
 
 The whole database is one JSON file — no code changes needed. Add an entry (or just a
@@ -493,9 +517,11 @@ AirDriver/
 - Per-adapter TX-power / regulatory region tweaks
 - Bootable USB persistence profile
 - AppImage / `.deb` packaging
-- Community VID:PID submission flow for genuinely unknown adapters
 
-Recently shipped in **v0.4.0 "Field Kit"**: driver *management* — `status`, `rebuild`
+Recently shipped in **v0.5.0 "Open Signal"**: painted vector icons (no emoji — buttons now
+render on a bare Kali install), `airdriver contribute` + a GUI **Report this adapter**
+button, and issue/PR templates with [CONTRIBUTING.md](CONTRIBUTING.md).
+Before that, **v0.4.0 "Field Kit"**: driver *management* — `status`, `rebuild`
 (kernel-upgrade repair), `sign` (Secure Boot), `modeswitch`, `recommend` — plus the chipset
 database grown to **32 families / 759 IDs** straight from the kernel's own device tables.
 See the [CHANGELOG](CHANGELOG.md).

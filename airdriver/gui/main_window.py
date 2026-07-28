@@ -26,7 +26,7 @@ from ..core import detector, monitor as mon, report as rep, system, verify
 from ..core.chipset_db import Chipset, ChipsetDB
 from ..core.detector import Adapter
 from ..core.installer import Executor, build_plan, build_remove_plan
-from . import theme as T
+from . import icons, theme as T
 
 REPO_URL = "https://github.com/at0m-b0mb/AirDriver"
 
@@ -174,8 +174,9 @@ class AdapterCard(QFrame):
         lay.setSpacing(6)
 
         top = QHBoxLayout()
-        dot = QLabel("●")
-        dot.setStyleSheet(f"color:{T.GOOD if adapter.known else T.DANGER};font-size:14px;")
+        dot = QLabel()
+        dot.setPixmap(icons.dot(T.GOOD if adapter.known else T.DANGER, 12))
+        dot.setFixedWidth(16)
         title = QLabel(adapter.title)
         title.setObjectName("H2")
         title.setWordWrap(True)
@@ -303,26 +304,27 @@ class MainWindow(QMainWindow):
         lay.addSpacing(6)
         lay.addLayout(col)
         lay.addStretch(1)
-        self.btn_manage = QPushButton("🔧 Drivers")
-        self.btn_manage.setToolTip("Installed drivers, kernel-upgrade rebuilds, Secure Boot signing")
-        self.btn_manage.clicked.connect(self.show_manage)
-        lay.addWidget(self.btn_manage)
-        self.btn_chips = QPushButton(f"📚 Chipsets ({len(self.db)})")
-        self.btn_chips.setToolTip("Browse & search every supported chipset and USB/PCI ID")
-        self.btn_chips.clicked.connect(self.show_chipsets)
-        lay.addWidget(self.btn_chips)
-        self.btn_diag = QPushButton("🩺 Diagnose")
-        self.btn_diag.setToolTip("Collect a full diagnostic snapshot (copied to clipboard) to share when stuck")
-        self.btn_diag.clicked.connect(self.run_diagnose)
-        lay.addWidget(self.btn_diag)
-        self.btn_help = QPushButton("?  Help")
-        self.btn_help.setToolTip("Quick start, troubleshooting, and the project page")
-        self.btn_help.clicked.connect(self.show_help)
-        lay.addWidget(self.btn_help)
-        self.btn_rescan = QPushButton("⟳  Rescan")
-        self.btn_rescan.setToolTip("Re-scan the USB/PCI bus for adapters")
-        self.btn_rescan.clicked.connect(self.rescan)
-        lay.addWidget(self.btn_rescan)
+        # Icons are painted vectors, never emoji — a minimal Kali install has no
+        # emoji font and every one of these buttons would render as a blank box.
+        for attr, text, ico, tip, slot in (
+            ("btn_manage", "Drivers", "wrench",
+             "Installed drivers, kernel-upgrade rebuilds, Secure Boot signing", self.show_manage),
+            ("btn_chips", f"Chipsets ({len(self.db)})", "book",
+             "Browse & search every supported chipset and USB/PCI ID", self.show_chipsets),
+            ("btn_diag", "Diagnose", "pulse",
+             "Collect a full diagnostic snapshot (copied to clipboard) to share when stuck",
+             self.run_diagnose),
+            ("btn_help", "Help", "question",
+             "Quick start, troubleshooting, and the project page", self.show_help),
+            ("btn_rescan", "Rescan", "refresh",
+             "Re-scan the USB/PCI bus for adapters", self.rescan),
+        ):
+            b = QPushButton(icons.icon(ico), text)
+            b.setIconSize(icons.SIZE)
+            b.setToolTip(tip)
+            b.clicked.connect(slot)
+            setattr(self, attr, b)
+            lay.addWidget(b)
         return h
 
     # ---- body --------------------------------------------------------------
@@ -382,6 +384,14 @@ class MainWindow(QMainWindow):
         for c in self.db.all():
             self.identify_combo.addItem(c.name, c.id)
         ir.addWidget(self.identify_combo, 1)
+        self.btn_report_adapter = QPushButton(icons.icon("upload", colour=T.CYAN),
+                                              "Report this adapter")
+        self.btn_report_adapter.setIconSize(icons.SIZE)
+        self.btn_report_adapter.setToolTip(
+            "Build a pre-filled report (usb id, lsusb, dmesg, kernel) so this adapter "
+            "can be added to the database. Nothing is sent until you submit it.")
+        self.btn_report_adapter.clicked.connect(self.report_adapter)
+        ir.addWidget(self.btn_report_adapter)
         self.identify_row.hide()
         lay.addWidget(self.identify_row)
 
@@ -402,35 +412,40 @@ class MainWindow(QMainWindow):
 
         # Action buttons
         actions = QHBoxLayout()
-        self.btn_install = QPushButton("⬇  Install driver")
+        self.btn_install = QPushButton(icons.icon("install", colour="#04130d"), "Install driver")
         self.btn_install.setObjectName("Primary")
+        self.btn_install.setIconSize(icons.SIZE)
         self.btn_install.setEnabled(False)
         self.btn_install.clicked.connect(self.install_selected)
         self.btn_plan = QPushButton("Preview plan")
         self.btn_plan.setEnabled(False)
         self.btn_plan.clicked.connect(self.preview_plan)
-        self.btn_verify = QPushButton("✔ Verify")
+        self.btn_verify = QPushButton(icons.icon("check"), "Verify")
+        self.btn_verify.setIconSize(icons.SIZE)
         self.btn_verify.setToolTip("Check the driver is built, loaded and bound to the adapter")
         self.btn_verify.setEnabled(False)
         self.btn_verify.clicked.connect(self.verify_selected)
-        self.btn_remove = QPushButton("Remove driver")
+        self.btn_remove = QPushButton(icons.icon("trash", colour=T.DIM), "Remove")
         self.btn_remove.setObjectName("Ghost")
+        self.btn_remove.setIconSize(icons.SIZE)
         self.btn_remove.setToolTip("Cleanly remove this driver (dkms/apt) so you can retry from scratch")
         self.btn_remove.setEnabled(False)
         self.btn_remove.clicked.connect(self.remove_selected)
-        self.btn_copylog = QPushButton("Copy log")
+        self.btn_copylog = QPushButton(icons.icon("clipboard"), "Copy log")
+        self.btn_copylog.setIconSize(icons.SIZE)
         self.btn_copylog.setToolTip("Copy the activity log to the clipboard (handy for forum help threads)")
         self.btn_copylog.clicked.connect(self.copy_log)
-        self.btn_report = QPushButton("Export report")
+        self.btn_report = QPushButton(icons.icon("document"), "Export report")
+        self.btn_report.setIconSize(icons.SIZE)
         self.btn_report.setToolTip("Write a JSON + Markdown diagnostic report")
         self.btn_report.clicked.connect(self.export_report)
+        # Adapter actions only. The log-related buttons live on the log header
+        # row below, so this row can never overflow and clip its labels.
         actions.addWidget(self.btn_install)
         actions.addWidget(self.btn_plan)
         actions.addWidget(self.btn_verify)
         actions.addStretch(1)
         actions.addWidget(self.btn_remove)
-        actions.addWidget(self.btn_copylog)
-        actions.addWidget(self.btn_report)
         lay.addLayout(actions)
 
         # Monitor-mode / injection quick controls (wraps airmon-ng / iw / aireplay-ng)
@@ -443,16 +458,17 @@ class MainWindow(QMainWindow):
         self.iface_combo.setMinimumWidth(120)
         self.iface_combo.setToolTip("Wireless interface to act on (e.g. wlan0)")
         self.iface_combo.addItem("wlan0")
-        self.btn_mon_on = QPushButton("Enable")
+        self.btn_mon_on = QPushButton(icons.icon("waves", colour=T.ACCENT), "Enable")
         self.btn_mon_on.setToolTip("Put the interface into monitor mode (airmon-ng start / iw)")
-        self.btn_mon_off = QPushButton("Disable")
+        self.btn_mon_off = QPushButton(icons.icon("stop", colour=T.DIM), "Disable")
         self.btn_mon_off.setToolTip("Return the interface to managed mode")
-        self.btn_mon_test = QPushButton("Injection test")
+        self.btn_mon_test = QPushButton(icons.icon("flask"), "Injection test")
         self.btn_mon_test.setToolTip("Run the aireplay-ng --test packet-injection self-check")
-        self.btn_mon_status = QPushButton("Status")
+        self.btn_mon_status = QPushButton(icons.icon("list"), "Status")
         self.btn_mon_status.setToolTip("Show each wireless interface's current mode")
         self._mon_btns = [self.btn_mon_on, self.btn_mon_off, self.btn_mon_test, self.btn_mon_status]
         for b, act in zip(self._mon_btns, ("start", "stop", "test", "status")):
+            b.setIconSize(icons.SIZE)
             b.clicked.connect(lambda _=False, a=act: self.run_monitor(a))
         montools.addWidget(mlbl)
         montools.addWidget(self.iface_combo, 1)
@@ -460,10 +476,16 @@ class MainWindow(QMainWindow):
             montools.addWidget(b)
         lay.addLayout(montools)
 
-        # Log console
+        # Log console — its own header row carries the log actions.
+        log_head = QHBoxLayout()
+        log_head.setSpacing(8)
         log_lbl = QLabel("Activity log")
         log_lbl.setObjectName("Dim")
-        lay.addWidget(log_lbl)
+        log_head.addWidget(log_lbl)
+        log_head.addStretch(1)
+        log_head.addWidget(self.btn_copylog)
+        log_head.addWidget(self.btn_report)
+        lay.addLayout(log_head)
         self.log = QPlainTextEdit()
         self.log.setReadOnly(True)
         self.log.setPlaceholderText("Install output appears here…")
@@ -525,7 +547,7 @@ class MainWindow(QMainWindow):
         self._render_cards(adapters)
         self._refresh_ifaces(adapters)
         self.btn_rescan.setEnabled(True)
-        self.btn_rescan.setText("⟳  Rescan")
+        self.btn_rescan.setText("Rescan")
         n = len(adapters)
         self.log_line(f"Found {n} adapter(s)." + (
             "  (demo data — not running on Linux)" if adapters and adapters[0].is_demo else ""))
@@ -534,7 +556,7 @@ class MainWindow(QMainWindow):
         # otherwise the user just sees a missing adapter.
         from ..core import manage
         for uid, desc in manage.storage_mode_devices(adapters):
-            self.log_line(f"\n⚠ {uid} is in driver-CD (storage) mode — {desc}")
+            self.log_line(f"\n[!] {uid} is in driver-CD (storage) mode — {desc}")
             self.log_line("   It won't appear as Wi-Fi until it's switched. Run:  "
                           f"sudo airdriver modeswitch {uid}")
 
@@ -551,15 +573,15 @@ class MainWindow(QMainWindow):
         add(info.distro_name, ok=True, tip="Detected distribution")
         add(f"kernel {info.kernel_release}", ok=True)
         if info.is_linux:
-            add("headers ✓" if info.headers_installed else "headers ✗",
+            add("headers ok" if info.headers_installed else "headers missing",
                 ok=info.headers_installed, warn=not info.headers_installed,
                 tip="Kernel headers are required for DKMS builds")
-            add("dkms ✓" if info.dkms_installed else "dkms ✗",
+            add("dkms ok" if info.dkms_installed else "dkms missing",
                 ok=info.dkms_installed, warn=not info.dkms_installed)
             sb = info.secure_boot
             add(f"secure boot: {sb}", ok=(sb == "off"), warn=(sb == "on"),
                 tip="Secure Boot blocks unsigned DKMS modules")
-            add("root ✓" if info.is_root else "not root",
+            add("root" if info.is_root else "not root",
                 ok=info.is_root, warn=not info.is_root,
                 tip="Installs need root; launch with sudo")
         else:
@@ -569,7 +591,7 @@ class MainWindow(QMainWindow):
             ok=info.has_internet, warn=not info.has_internet)
         self.status_strip_l.addWidget(_chip(
             f"DB: {len(self.db)} chipsets · {self.db.usb_id_count()} IDs", T.CYAN,
-            tip="Supported chipset families and USB/PCI IDs — click 📚 Chipsets to browse"))
+            tip="Supported chipset families and USB/PCI IDs — click Chipsets to browse"))
         self.status_strip_l.addStretch(1)
 
     def _render_cards(self, adapters):
@@ -774,7 +796,7 @@ class MainWindow(QMainWindow):
 
     def _on_diagnose_done(self, text: str):
         self.btn_diag.setEnabled(True)
-        self.btn_diag.setText("🩺 Diagnose")
+        self.btn_diag.setText("Diagnose")
         self.log.setPlainText(text)
         QApplication.clipboard().setText(text)
         QMessageBox.information(
@@ -786,7 +808,7 @@ class MainWindow(QMainWindow):
         for b in (self.btn_install, self.btn_plan, self.btn_rescan, self.btn_verify,
                   self.btn_remove, self.btn_manage, *self._mon_btns):
             b.setEnabled(not busy)
-        self.btn_install.setText("Installing…" if busy else "⬇  Install driver")
+        self.btn_install.setText("Installing…" if busy else "Install driver")
 
     # ---- monitor mode / injection -----------------------------------------
     def _refresh_ifaces(self, adapters):
@@ -825,11 +847,40 @@ class MainWindow(QMainWindow):
             b.setEnabled(True)
         self.log_line(r.output or "(no output)")
         if not r.ok and action != "status":
-            self.log_line("⚠ That didn't succeed. Monitor mode needs root and the "
+            self.log_line("[!] That didn't succeed. Monitor mode needs root and the "
                           "aircrack-ng / iw tools — try launching with sudo, and "
                           "'airdriver monitor killservices' to stop interfering processes.")
         if action in ("start", "stop"):
             QTimer.singleShot(0, self.rescan)
+
+    # ---- contribute an unknown adapter -------------------------------------
+    def report_adapter(self):
+        """Assemble a report for the selected adapter and let the user decide
+        whether to open the pre-filled issue. Nothing leaves the machine here."""
+        from ..core import contribute as contrib
+        a = self.selected
+        if a is None or self.sysinfo is None:
+            return
+        rep = contrib.build(a, self.sysinfo, self.db)
+        self.log.clear()
+        self.log_line(rep.body)
+        QApplication.clipboard().setText(rep.body)
+
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Information)
+        box.setWindowTitle("Report this adapter")
+        box.setText(f"A report for {rep.usb_id} is ready.")
+        box.setInformativeText(
+            "It's shown in the log and copied to your clipboard.\n\n"
+            "It contains your kernel version, distro, and the lsusb/dmesg lines for "
+            "this device — please glance over it first.\n\n"
+            "Open the pre-filled issue in your browser? Nothing is sent until you "
+            "press Submit on GitHub.")
+        box.setStandardButtons(QMessageBox.Open | QMessageBox.Close)
+        box.setDefaultButton(QMessageBox.Close)
+        if box.exec() == QMessageBox.Open:
+            QDesktopServices.openUrl(QUrl(rep.url))
+            self.log_line("\nOpened the pre-filled issue in your browser.")
 
     # ---- driver management -------------------------------------------------
     def show_manage(self):
@@ -971,8 +1022,8 @@ class MainWindow(QMainWindow):
                     f"<br><span style='color:{T.DIM};font-size:11px'>{c.id} · {c.vendor} · {c.band}</span>"
                     f"<br><span style='color:{T.DIM};font-size:10px'>{len(c.usb_ids)} IDs · {path}</span></td>"
                     f"<td style='padding:7px 10px;white-space:nowrap'>"
-                    f"<span style='color:{mon_c}'>monitor {'✓' if c.monitor_mode else '✗'}</span><br>"
-                    f"<span style='color:{inj_c}'>injection {'✓' if c.injection else '✗'}</span>"
+                    f"<span style='color:{mon_c}'>{'monitor' if c.monitor_mode else 'no monitor'}</span><br>"
+                    f"<span style='color:{inj_c}'>{'injection' if c.injection else 'no injection'}</span>"
                     f"<br><span style='color:{T.DIM};font-size:11px'>{c.injection_quality}</span></td>"
                     f"</tr>")
             body = "".join(rows) or f"<tr><td style='padding:10px;color:{T.DIM}'>No matches.</td></tr>"
@@ -1010,7 +1061,7 @@ class MainWindow(QMainWindow):
             self.log_line("(nothing to copy yet)")
             return
         QApplication.clipboard().setText(text)
-        self.log_line("📋 Log copied to clipboard.")
+        self.log_line("Log copied to clipboard.")
 
     # ---- help / about ------------------------------------------------------
     def show_help(self):
@@ -1028,8 +1079,8 @@ class MainWindow(QMainWindow):
         <h3 style="color:{T.CYAN}">Quick start</h3>
         <ol>
           <li>Plug in your USB WiFi adapter.</li>
-          <li>Press <b>⟳ Rescan</b> and select the adapter card on the left.</li>
-          <li>Review the chipset details &amp; capabilities, then click <b>⬇ Install driver</b>.</li>
+          <li>Press <b>Rescan</b> and select the adapter card on the left.</li>
+          <li>Review the chipset details &amp; capabilities, then click <b>Install driver</b>.</li>
           <li>Tick <b>Dry run</b> first if you want to preview every step without changing anything.</li>
         </ol>
 
@@ -1056,7 +1107,7 @@ class MainWindow(QMainWindow):
           Chipset database: <a style="color:{T.CYAN}" href="{REPO_URL}/blob/main/airdriver/data/chipsets.json">chipsets.json</a>
         </p>
 
-        <p style="color:{T.WARN}">⚠ Use monitor mode / injection only on networks you own or are
+        <p style="color:{T.WARN}"><b>Note:</b> use monitor mode / injection only on networks you own or are
         authorised to test.</p>
         """)
         lay.addWidget(view)

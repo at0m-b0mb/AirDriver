@@ -2,6 +2,34 @@
 
 All notable changes to AirDriver are documented here.
 
+## [0.5.0] — 2026-07-27 · "Open Signal"
+
+Fixes a UI regression that made buttons look broken on the machines AirDriver targets,
+and makes contributing an unknown adapter a 30-second job.
+
+### Fixed
+- **Buttons appeared to have no icons on Kali/Parrot.** v0.3.0 and v0.4.0 put emoji
+  (`🔧 📚 🩺 ⬇ 📋`) in button labels. A minimal Kali install has no emoji font, so those
+  rendered as blank tofu boxes and the toolbar looked broken. All of them are replaced by
+  **`airdriver/gui/icons.py`** — 16 icons drawn with QPainter, so they render identically
+  on a bare box and a full desktop, at any DPI. Also swapped the risky `⟳`, `⚠` and `⬇`
+  in log/help text for text that every default font set can show.
+  `tests/test_gui_glyphs.py` now fails the build if an emoji reappears, or if a widget
+  asks for an icon that doesn't exist.
+- **Action-row labels were clipped** ("Install drive", "Export repor") once icons widened
+  the buttons. The log actions moved onto the log header row, so the row can't overflow.
+
+### Added — contributing back
+- **`airdriver contribute`** — builds a complete, ready-to-file report for an unrecognised
+  adapter (usb id, `lsusb` descriptors, kernel, distro, matching `dmesg` lines) and prints
+  a pre-filled GitHub issue link. `--open` opens it. **Nothing is ever sent automatically:**
+  the report describes the user's machine, so they read it and decide.
+- GUI: a **Report this adapter** button next to *Identify as*, which shows the report,
+  copies it to the clipboard, and offers to open the pre-filled issue.
+- Structured **issue templates** (adapter / bug), a **PR template** whose checklist covers
+  the ID-sourcing rules and the no-emoji rule, and **`CONTRIBUTING.md`** documenting how the
+  database works and the three rules for adding IDs.
+
 ## [0.4.0] — 2026-07-26 · "Field Kit"
 
 Turns AirDriver from an *installer* into a driver **manager**, and roughly triples the

@@ -1,0 +1,71 @@
+name: "Add / fix an adapter"
+description: "Your Wi-Fi adapter isn't recognised, or is matched to the wrong chipset."
+title: "[adapter] vid:pid — adapter name"
+labels: ["new-adapter"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping grow the chipset database — this is the single most
+        useful contribution to AirDriver.
+
+        **The quickest way to fill this in:** run
+
+        ```bash
+        airdriver contribute
+        ```
+
+        …which builds the whole report for you (and can open this form pre-filled
+        with `airdriver contribute --open`).
+
+  - type: input
+    id: usb_id
+    attributes:
+      label: USB / PCI ID
+      description: "Lowercase `vid:pid` — from `lsusb`, or `lspci -nn` for an internal card."
+      placeholder: "0bda:8812"
+    validations:
+      required: true
+
+  - type: input
+    id: adapter
+    attributes:
+      label: Adapter make & model
+      placeholder: "ALFA AWUS036ACH / TP-Link Archer T2U v3"
+    validations:
+      required: true
+
+  - type: input
+    id: chipset
+    attributes:
+      label: Chipset (if you know it)
+      description: "From the vendor page, the FCC ID, or a sticker inside the case. Leave blank if unsure — please don't guess."
+      placeholder: "RTL8812AU"
+
+  - type: textarea
+    id: details
+    attributes:
+      label: Report
+      description: "Paste the output of `airdriver contribute` here (it includes lsusb, kernel, and dmesg)."
+      render: markdown
+    validations:
+      required: true
+
+  - type: dropdown
+    id: works
+    attributes:
+      label: Does it work today?
+      options:
+        - "Not at all — no interface appears"
+        - "Connects, but monitor mode fails"
+        - "Monitor mode works, injection doesn't"
+        - "Works fully, it's just missing from the database"
+        - "Matched to the WRONG chipset"
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: "Which driver made it work, if you found one. Links to the vendor page help."

@@ -1,0 +1,44 @@
+name: "Bug report"
+description: "Something in AirDriver itself is broken."
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If a *driver* won't work, please run `sudo airdriver diagnose` and paste
+        the output — it captures everything needed in one go.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: "What you ran, what you expected, what you got."
+    validations:
+      required: true
+
+  - type: textarea
+    id: diagnose
+    attributes:
+      label: "Output of `sudo airdriver diagnose`"
+      description: "Auto-copied to your clipboard when you run it."
+      render: shell
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: AirDriver version
+      description: "`airdriver --version`"
+      placeholder: "AirDriver 0.5.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: how
+    attributes:
+      label: How are you running it?
+      options: ["GUI", "CLI", "both"]
+    validations:
+      required: true

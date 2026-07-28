@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: "Which adapter should I buy?"
+    url: https://github.com/at0m-b0mb/AirDriver#-attack-grade--reliable-monitor-mode--injection
+    about: "Run `airdriver recommend`, or see the honest capability tables in the README."
+  - name: "Driver installed but Wi-Fi still doesn't work"
+    url: https://github.com/at0m-b0mb/AirDriver#-troubleshooting
+    about: "Try `airdriver verify`, `airdriver fix`, and `sudo airdriver diagnose` first."

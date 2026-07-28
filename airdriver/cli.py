@@ -17,6 +17,7 @@ so it works over SSH on a headless box.
     airdriver sign            # sign modules so Secure Boot loads them
     airdriver modeswitch      # kick a 'driver CD-ROM' dongle into Wi-Fi mode
     airdriver recommend       # which adapter should I actually use?
+    airdriver contribute      # report an unknown adapter to the project
 """
 
 from __future__ import annotations
@@ -524,6 +525,47 @@ def cmd_recommend(args, db: ChipsetDB) -> int:
     return 0
 
 
+def cmd_contribute(args, db: ChipsetDB) -> int:
+    """Build a ready-to-file report for an adapter so it can be added to the DB."""
+    from .core import contribute as contrib
+    info = system.gather()
+    adapters = detector.detect(db)
+    target = None
+    if args.target:
+        target = next((a for a in adapters if a.usb_id == args.target.lower()), None)
+        if target is None:
+            from .core.detector import Adapter
+            vid, _, pid = args.target.lower().partition(":")
+            if not pid:
+                print(red(f"'{args.target}' doesn't look like a usb id (e.g. 0bda:8812)."))
+                return 1
+            target = Adapter(bus="-", device="-", vid=vid, pid=pid,
+                             description="(not currently plugged in)",
+                             chipset=db.match_usb(args.target))
+    else:
+        target = next((a for a in adapters if not a.known), None)
+        if target is None:
+            print(green("Every detected adapter is already in the database — "
+                        "nothing to report."))
+            print(dim("  To report one anyway:  airdriver contribute <vid:pid>"))
+            return 0
+
+    rep = contrib.build(target, info, db)
+    print(BANNER)
+    print(bold(f"Report for {rep.usb_id}\n"))
+    print(rep.body)
+    print(bold(cyan("\n── File it ──────────────────────────────────")))
+    print("\nOpen this link, review what it contains, then submit:\n")
+    print(f"  {rep.url}\n")
+    print(dim("  Nothing has been sent. The link just pre-fills the issue form —\n"
+              "  you decide whether to submit it."))
+    if args.open:
+        import webbrowser
+        webbrowser.open(rep.url)
+        print(green("\nOpened in your browser."))
+    return 0
+
+
 def cmd_gui(args, db: ChipsetDB) -> int:
     try:
         from .gui.app import run as run_gui
@@ -607,6 +649,11 @@ def build_parser() -> argparse.ArgumentParser:
     prc.add_argument("--band", choices=["2.4", "5"], help="Only adapters covering this band")
     prc.add_argument("--no-injection", action="store_true",
                      help="Include monitor-only adapters (no injection needed)")
+
+    pcn = sub.add_parser("contribute", help="Report an unknown adapter so it can be "
+                                            "added to the database")
+    pcn.add_argument("target", nargs="?", help="usb id (default: the first unknown adapter)")
+    pcn.add_argument("--open", action="store_true", help="Open the pre-filled issue in a browser")
     return p
 
 
@@ -616,6 +663,7 @@ _DISPATCH = {
     "verify": cmd_verify, "remove": cmd_remove, "fix": cmd_fix,
     "diagnose": cmd_diagnose, "status": cmd_status, "rebuild": cmd_rebuild,
     "sign": cmd_sign, "modeswitch": cmd_modeswitch, "recommend": cmd_recommend,
+    "contribute": cmd_contribute,
 }
 
 
