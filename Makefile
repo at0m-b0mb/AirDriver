@@ -5,7 +5,7 @@ VPY   := $(VENV)/bin/python
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install setup gui run scan doctor db offline clean uninstall
+.PHONY: help install setup gui run scan doctor db offline clean uninstall purge test shots
 
 help: ## Show this help
 	@echo "AirDriver — make targets:"
@@ -41,6 +41,14 @@ offline: ## Pre-fetch driver sources for air-gapped installs (run while online)
 clean: ## Remove the local venv and build artifacts
 	rm -rf $(VENV) build dist *.egg-info airdriver/*.egg-info
 
-uninstall: ## Remove the system launcher and local venv
-	sudo rm -f /usr/local/bin/airdriver
-	rm -rf $(VENV)
+uninstall: ## Remove AirDriver (keeps the Wi-Fi drivers it installed)
+	sudo ./uninstall.sh
+
+purge: ## Remove AirDriver AND every Wi-Fi driver it installed
+	sudo ./uninstall.sh --drivers
+
+test: setup ## Run the test suite
+	$(VPY) -m unittest discover -s tests
+
+shots: setup ## Regenerate the GUI screenshots in docs/screenshots/
+	QT_QPA_PLATFORM=offscreen AIRDRIVER_FORCE_GUI=1 $(VPY) scripts/gen_screenshots.py

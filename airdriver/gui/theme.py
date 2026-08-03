@@ -38,6 +38,14 @@ def stylesheet() -> str:
         selection-color: {TEXT};
     }}
 
+    /* The universal rule above is what gives the window its background, but it
+       also paints {BG} behind every *child* widget — so each label sitting on a
+       lighter card was drawing its own dark rectangle, and the cards looked like
+       they were full of mismatched boxes. Labels/checkboxes never want their own
+       fill; they should show whatever panel they happen to sit on. */
+    QLabel, QCheckBox, QRadioButton {{ background: transparent; }}
+    QScrollArea, QScrollArea > QWidget > QWidget {{ background: transparent; }}
+
     /* ---- typography & label roles ------------------------------------ */
     QLabel#H1 {{ font-size: 22px; font-weight: 800; }}
     QLabel#H2 {{ font-size: 15px; font-weight: 600; }}

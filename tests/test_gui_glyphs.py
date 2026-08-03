@@ -84,5 +84,69 @@ class IconSet(unittest.TestCase):
         self.assertTrue(requested, "no icons found — did the call style change?")
 
 
+try:  # Qt is an optional extra; these tests simply skip without it.
+    import os
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtCore import QSize
+    from PySide6.QtGui import QIcon
+    from PySide6.QtWidgets import QApplication
+    _HAVE_QT = True
+except ImportError:  # pragma: no cover - depends on the environment
+    _HAVE_QT = False
+
+
+@unittest.skipUnless(_HAVE_QT, "needs PySide6")
+class IconRendering(unittest.TestCase):
+    """Icons must actually put pixels on the button, at every scale factor.
+
+    The v0.5 icons were rasterised once into a fixed 32px pixmap, so Qt rescaled
+    them for the 16px icon size the buttons requested and again for HiDPI —
+    which is how they ended up faint or invisible depending on the desktop's
+    scaling. These tests pin the resolution-independent behaviour.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+        from airdriver.gui import icons
+        cls.icons = icons
+
+    def _opaque(self, pixmap) -> int:
+        img = pixmap.toImage()
+        return sum(1 for y in range(img.height()) for x in range(img.width())
+                   if img.pixelColor(x, y).alpha() > 8)
+
+    def test_every_icon_draws_something(self):
+        blank = []
+        for name in self.icons.available():
+            pm = self.icons.icon(name).pixmap(QSize(18, 18))
+            if self._opaque(pm) == 0:
+                blank.append(name)
+        self.assertEqual(blank, [], f"icons render as empty pixmaps: {blank}")
+
+    def test_pixmap_honours_the_requested_device_pixel_ratio(self):
+        """At dpr=2 an 18px icon must come back as a real 36px bitmap, not an
+        18px one stretched — that upscale is the 'washed out' bug."""
+        ico = self.icons.icon("refresh")
+        for dpr, expect in ((1.0, 18), (1.5, 27), (2.0, 36)):
+            pm = ico.pixmap(QSize(18, 18), dpr)
+            self.assertEqual((pm.width(), pm.height()), (expect, expect),
+                             f"dpr={dpr}: expected {expect}px of real pixels")
+            self.assertAlmostEqual(pm.devicePixelRatio(), dpr, places=3)
+
+    def test_higher_dpr_carries_more_detail(self):
+        ico = self.icons.icon("wrench")
+        low = self._opaque(ico.pixmap(QSize(18, 18), 1.0))
+        high = self._opaque(ico.pixmap(QSize(18, 18), 2.0))
+        self.assertGreater(high, low * 2,
+                           "the 2x pixmap is not carrying extra detail")
+
+    def test_disabled_mode_still_renders(self):
+        """A disabled button must show a dimmed icon, not a blank space."""
+        for name in ("install", "trash", "refresh"):
+            pm = self.icons.icon(name).pixmap(QSize(18, 18), 1.0, QIcon.Disabled)
+            self.assertGreater(self._opaque(pm), 0, f"{name} vanishes when disabled")
+
+
 if __name__ == "__main__":
     unittest.main()

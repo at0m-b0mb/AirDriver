@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import os
 import re
+import shlex
 import shutil
 import subprocess
 from dataclasses import dataclass, field
@@ -256,6 +257,74 @@ def build_rebuild_plan(info: SystemInfo, only: Optional[str] = None) -> InstallP
     plan.steps.append(Step(
         title="Show the resulting DKMS state",
         shell="dkms status", privileged=False, optional=True))
+    return plan
+
+
+# --------------------------------------------------------------------------- #
+# Purge — remove every driver AirDriver could have installed                  #
+# --------------------------------------------------------------------------- #
+def purge_targets(db: ChipsetDB) -> tuple[list[str], list[str]]:
+    """(dkms_labels, apt_packages) that AirDriver plausibly installed.
+
+    DKMS entries are correlated against the chipset database rather than removed
+    blindly, so an unrelated module (a GPU or VirtualBox driver, say) is never
+    caught in the sweep.
+    """
+    apt_pkgs = sorted({d.package for c in db.all() for d in c.drivers
+                       if d.method == "apt" and d.package})
+    labels = [m.label for m in dkms_inventory() if _chipsets_for_module(db, m.name)]
+    return labels, apt_pkgs
+
+
+def build_purge_plan(db: ChipsetDB, info: SystemInfo) -> InstallPlan:
+    """One-shot cleanup: every Wi-Fi driver AirDriver installed, gone, and the
+    in-kernel drivers un-blacklisted so the adapters fall back to them."""
+    from .modules import BLACKLIST_FILE
+
+    labels, apt_pkgs = purge_targets(db)
+    plan = InstallPlan(adapter=None, chipset=None, method="purge",
+                       summary="Remove every AirDriver-installed Wi-Fi driver",
+                       needs_reboot=False)
+
+    if not labels and not apt_pkgs and not os.path.exists(BLACKLIST_FILE):
+        plan.steps.append(Step(
+            title="Nothing to remove — no AirDriver-installed drivers found.",
+            kind="note"))
+        return plan
+
+    for label in labels:
+        plan.steps.append(Step(
+            title=f"Remove DKMS module '{label}'", privileged=True, optional=True,
+            shell=f'sudo dkms remove {shlex.quote(label)} --all 2>/dev/null || '
+                  f'sudo dkms remove {shlex.quote(label)} 2>/dev/null || true'))
+
+    if apt_pkgs:
+        pkgs = " ".join(shlex.quote(p) for p in apt_pkgs)
+        plan.steps.append(Step(
+            title=f"Remove any of the {len(apt_pkgs)} known driver apt packages",
+            privileged=True, optional=True,
+            shell=(f'for p in {pkgs}; do\n'
+                   '  if dpkg -l "$p" 2>/dev/null | grep -q "^ii"; then\n'
+                   '    echo "[airdriver] apt remove $p"\n'
+                   '    sudo apt-get remove -y "$p" || true\n'
+                   '  fi\n'
+                   'done\n'
+                   'echo "[airdriver] apt cleanup done"')))
+
+    plan.steps.append(Step(
+        title="Remove AirDriver's modprobe blacklist", privileged=True, optional=True,
+        shell=(f'if [ -f {BLACKLIST_FILE} ]; then\n'
+               f'  sudo rm -f {BLACKLIST_FILE}\n'
+               f'  echo "[airdriver] removed {BLACKLIST_FILE} — in-kernel drivers '
+               'are free to bind again"\n'
+               'else\n'
+               '  echo "[airdriver] no blacklist file present"\n'
+               'fi')))
+    plan.steps.append(Step(title="Rebuild module dependency map",
+                           shell="sudo depmod -a", privileged=True, optional=True))
+    plan.warnings.append(
+        "This removes out-of-tree Wi-Fi drivers only. In-kernel drivers are never "
+        "touched — after a reboot (or a re-plug) your adapters fall back to them.")
     return plan
 
 

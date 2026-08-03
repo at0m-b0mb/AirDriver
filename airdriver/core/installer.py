@@ -420,25 +420,47 @@ def build_remove_plan(chip: Chipset, sysinfo: SystemInfo) -> InstallPlan:
     apt_pkgs = sorted({d.package for d in chip.drivers
                        if d.method == "apt" and d.package})
 
-    if not oot_modules and not apt_pkgs:
+    if not oot_modules and not apt_pkgs and not chip.blacklist:
         plan.steps.append(Step(
             title="Nothing to remove — this chipset uses the in-kernel driver only.",
             kind="note"))
         return plan
 
-    if oot_modules:
-        pattern = "|".join(re.escape(m) for m in oot_modules)
+    if oot_modules or apt_pkgs:
+        # Match DKMS *package* names, which rarely equal the module name: the
+        # module is `88XXau` but dkms registers `rtl88xxau`, and the apt package
+        # is `realtek-rtl88xxau-dkms`. Matching had been case-sensitive against
+        # the module name alone, so `dkms status` never matched and removal
+        # silently did nothing at all. Search case-insensitively across every
+        # name this chipset could plausibly be registered under.
+        needles = set(oot_modules) | {chip.id}
+        for pkg in apt_pkgs:
+            needles.add(pkg)
+            # realtek-rtl88xxau-dkms -> rtl88xxau
+            needles.add(re.sub(r"(^realtek-|-dkms$)", "", pkg))
+        # Drivers are just as often registered without the vendor prefix
+        # (`8812au` rather than `rtl8812au`), so match the bare form too.
+        for n in list(needles):
+            stripped = re.sub(r"^rtl", "", n)
+            if len(stripped) >= 5:
+                needles.add(stripped)
+        pattern = "|".join(sorted(re.escape(n) for n in needles if n))
         plan.steps.append(Step(
-            title=f"Remove DKMS modules ({', '.join(oot_modules)})",
+            title=f"Remove DKMS modules matching: {', '.join(sorted(needles))}",
             privileged=True, optional=True,
             shell=(
                 f'PATTERN={shlex.quote(pattern)}\n'
-                'dkms status 2>/dev/null | grep -E "$PATTERN" | sed "s/[,:].*//" '
-                '| sort -u | while read -r mod; do\n'
+                'FOUND=0\n'
+                'while read -r mod; do\n'
                 '  [ -n "$mod" ] || continue\n'
+                '  FOUND=1\n'
                 '  echo "[airdriver] dkms remove $mod"\n'
-                '  sudo dkms remove "$mod" --all 2>/dev/null || sudo dkms remove "$mod" 2>/dev/null || true\n'
-                'done\n'
+                '  sudo dkms remove "$mod" --all 2>/dev/null || '
+                'sudo dkms remove "$mod" 2>/dev/null || true\n'
+                'done <<EOF\n'
+                '$(dkms status 2>/dev/null | grep -iE "$PATTERN" | sed "s/[,:].*//" | sort -u)\n'
+                'EOF\n'
+                '[ "$FOUND" = 1 ] || echo "[airdriver] no matching DKMS module was registered"\n'
                 'echo "[airdriver] dkms cleanup done"')))
         for m in oot_modules:
             plan.steps.append(Step(
@@ -451,6 +473,27 @@ def build_remove_plan(chip: Chipset, sysinfo: SystemInfo) -> InstallPlan:
             title=f"Remove apt package '{pkg}' (if installed)",
             shell=f"dpkg -l {pkg} >/dev/null 2>&1 && sudo apt-get remove -y {pkg} || true",
             privileged=True, optional=True))
+
+    # Installing wrote a modprobe blacklist so the in-kernel driver would keep
+    # its hands off the adapter. Leaving it behind after a removal is worse than
+    # the original problem: the out-of-tree driver is gone AND the in-kernel one
+    # is forbidden, so the adapter has no driver at all and looks permanently
+    # dead. Drop the file as part of the removal.
+    if chip.blacklist:
+        plan.steps.append(Step(
+            title=f"Un-blacklist the in-kernel driver(s): {', '.join(chip.blacklist)}",
+            privileged=True, optional=True,
+            shell=(f'if [ -f {BLACKLIST_FILE} ]; then\n'
+                   f'  sudo rm -f {BLACKLIST_FILE}\n'
+                   f'  echo "[airdriver] removed {BLACKLIST_FILE}"\n'
+                   'else\n'
+                   '  echo "[airdriver] no AirDriver blacklist file to remove"\n'
+                   'fi')))
+        for m in chip.blacklist:
+            plan.steps.append(Step(
+                title=f"Load the in-kernel module '{m}' again",
+                shell=f"sudo modprobe {m} 2>/dev/null || true",
+                privileged=True, optional=True))
 
     plan.steps.append(Step(title="Rebuild module dependency map",
                            shell="sudo depmod -a", privileged=True, optional=True))
@@ -466,10 +509,17 @@ class Executor:
         self.sysinfo = sysinfo
         self.dry_run = dry_run
 
+    # `sudo` only when it starts a command: line start, or after ; && || | ( or
+    # a shell keyword. A blanket str.replace("sudo ", "") also rewrote the word
+    # inside quoted help text, so messages that told the user to run
+    # "sudo usb_modeswitch …" lost the sudo and became wrong advice.
+    _SUDO_AT_CMD = re.compile(
+        r"(?m)(?P<lead>^|[;&|(]\s*|\b(?:then|else|do|elif)\s+)sudo\s+")
+
     def _maybe_sudo(self, shell: str) -> str:
-        # If already root, strip the literal 'sudo ' so logs are clean.
+        # If already root, drop the leading 'sudo' so logs are clean.
         if self.sysinfo.is_root:
-            return shell.replace("sudo ", "")
+            return self._SUDO_AT_CMD.sub(lambda m: m.group("lead"), shell)
         return shell
 
     def run(self, plan: InstallPlan, log: LogFn) -> bool:
@@ -484,7 +534,11 @@ class Executor:
             log(plan.describe())
             return True
 
+        # `ok` tracks whether anything went wrong at all. It used to be set once
+        # and returned unchanged, so a run where several optional steps failed
+        # still reported unqualified success.
         ok = True
+        skipped: list[str] = []
         for i, step in enumerate(plan.steps, 1):
             log(f"\n[{i}/{len(plan.steps)}] {step.title}")
             try:
@@ -499,14 +553,25 @@ class Executor:
                         return False
                     if rc != 0:
                         log(f"  [!] optional step returned {rc}, continuing.")
+                        ok = False
+                        skipped.append(step.title)
             except Exception as exc:  # noqa: BLE001 — surface any failure to the log
                 if step.optional:
                     log(f"  [!] {exc} (optional, continuing)")
+                    ok = False
+                    skipped.append(step.title)
                 else:
                     log(f"  ✗ {exc}")
                     return False
-        log("\n✓ Install steps complete." +
-            (" Reboot recommended." if plan.needs_reboot else " No reboot needed."))
+        if ok:
+            log("\n✓ All steps completed." +
+                (" Reboot recommended." if plan.needs_reboot else " No reboot needed."))
+        else:
+            log(f"\n[!] Finished, but {len(skipped)} optional step(s) did not succeed:")
+            for t in skipped:
+                log(f"      - {t}")
+            log("  This is often harmless. If the adapter doesn't work, the "
+                "verification report below says what to do next.")
         return ok
 
     def _run_shell(self, shell: str, log: LogFn) -> int:

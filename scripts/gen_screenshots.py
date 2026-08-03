@@ -44,8 +44,14 @@ def _settle(app: QApplication, ms: int = 1800) -> None:
 def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
     app = QApplication.instance() or QApplication(sys.argv)
+    # Match airdriver.gui.app exactly, so the screenshots show what a Linux user
+    # actually sees rather than whatever style the host machine defaults to.
+    app.setStyle("Fusion")
+    font = QFont()
+    font.setFamilies(["Inter", "Cantarell", "Noto Sans", "DejaVu Sans", "sans-serif"])
+    font.setPointSize(10)
+    app.setFont(font)
     app.setStyleSheet(T.stylesheet())
-    app.setFont(QFont("Inter", 10))
 
     win = MainWindow()
     win.resize(1160, 760)

@@ -7,7 +7,7 @@
 [![Platform](https://img.shields.io/badge/platform-Kali%20%7C%20Parrot%20%7C%20Debian-1f9e72?style=flat-square)](https://www.kali.org/)
 [![Python](https://img.shields.io/badge/python-3.9%2B-2ee6a6?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![GUI](https://img.shields.io/badge/GUI-PySide6-38bdf8?style=flat-square&logo=qt&logoColor=white)](https://doc.qt.io/qtforpython/)
-[![Chipsets](https://img.shields.io/badge/chipsets-32%20families%20%C2%B7%20759%20IDs-f5a623?style=flat-square)](airdriver/data/chipsets.json)
+[![Chipsets](https://img.shields.io/badge/chipsets-40%20families%20%C2%B7%20858%20IDs-f5a623?style=flat-square)](airdriver/data/chipsets.json)
 [![CI](https://img.shields.io/github/actions/workflow/status/at0m-b0mb/AirDriver/ci.yml?branch=main&style=flat-square&label=tests)](../../actions)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-2ee6a6?style=flat-square)](CONTRIBUTING.md)
@@ -15,7 +15,7 @@
 **Plug in your adapter → AirDriver identifies the chipset → installs the right driver.**
 
 Built for pentesters who just want monitor mode and packet injection to *work*.
-`Realtek` · `Atheros` · `MediaTek/Ralink` · `Intel` — **32 chipset families · 759 USB/PCI IDs** · hybrid online/offline · a clean GUI **and** a full CLI.
+`Realtek` · `Atheros` · `MediaTek/Ralink` · `Intel` — **40 chipset families · 858 USB/PCI IDs** · hybrid online/offline · a clean GUI **and** a full CLI.
 
 Not just an installer: AirDriver **manages** your drivers — it rebuilds them when a kernel
 upgrade breaks Wi-Fi, signs them for Secure Boot, and tells you honestly whether a card
@@ -27,11 +27,32 @@ can really inject.
 
 ## ⚡ Quick start
 
+**One line — nothing to clone:**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/at0m-b0mb/AirDriver/main/install.sh | sudo bash
+```
+
+That installs the dependencies, the GUI, and the `airdriver` command. Then:
+
+```bash
+sudo airdriver           # opens the GUI
+```
+
+**Prefer to read the script first?** (Always a fair instinct for a `curl | bash`.)
+
 ```bash
 git clone https://github.com/at0m-b0mb/AirDriver
 cd AirDriver
 sudo ./install.sh        # installs deps + the `airdriver` command
 sudo airdriver           # opens the GUI
+```
+
+**Changed your mind?** Undoing it is one line too:
+
+```bash
+sudo ./uninstall.sh              # remove AirDriver, keep the Wi-Fi drivers it installed
+sudo ./uninstall.sh --drivers    # …and remove those drivers as well
 ```
 
 **Don't want to install anything system-wide?** Just run it from the folder:
@@ -100,8 +121,8 @@ them on an air-gapped machine.
   adapters meant for the out-of-tree driver.
 - 📶 **Monitor mode + injection** — enable/disable monitor mode and run an `aireplay-ng`
   injection self-test right from the GUI (or `airdriver monitor status/start/stop/test`).
-- 📚 **Searchable chipset browser** — the GUI's **Chipsets** panel filters all 32 families
-  and 759 IDs by name, vendor, band, or `vid:pid` so you can check a card before you buy.
+- 📚 **Searchable chipset browser** — the GUI's **Chipsets** panel filters all 40 families
+  and 858 IDs by name, vendor, band, or `vid:pid` so you can check a card before you buy.
 - 🛒 **Buying advice** — `airdriver recommend` ranks the chipsets that genuinely do monitor
   mode *and* injection, preferring ones that need no driver build at all.
 - 🤖 **Scriptable** — `airdriver scan --json` and `airdriver db --json` emit machine-readable
@@ -133,7 +154,7 @@ them on an air-gapped machine.
 
 <br/><br/>
 
-**Know before you buy** — search all 32 chipset families and 759 USB/PCI IDs, with honest monitor/injection flags:
+**Know before you buy** — search all 40 chipset families and 858 USB/PCI IDs, with honest monitor/injection flags:
 
 <img src="docs/screenshots/gui-chipsets.png" alt="AirDriver chipset browser" width="900">
 
@@ -184,8 +205,35 @@ make gui                 # set up a local venv and launch the GUI
 make scan                # CLI scan
 make doctor              # CLI readiness check
 make offline             # pre-fetch driver sources for air-gapped use
+make test                # run the test suite
+make uninstall           # remove AirDriver (keeps your Wi-Fi drivers)
+make purge               # remove AirDriver *and* every driver it installed
 make help                # list everything
 ```
+
+### Uninstalling
+
+Two separate things can be removed, and AirDriver keeps them separate on purpose —
+uninstalling the tool should not take your Wi-Fi down with it.
+
+```bash
+sudo ./uninstall.sh              # remove AirDriver; drivers keep working
+sudo ./uninstall.sh --drivers    # also remove every driver AirDriver installed
+sudo ./uninstall.sh --all        # …and delete the Secure Boot signing key
+```
+
+To clear the drivers but keep AirDriver around:
+
+```bash
+sudo airdriver remove --all              # every driver AirDriver installed
+sudo airdriver remove --all --dry-run    # show exactly what would go, change nothing
+sudo airdriver remove rtl8812au          # just one chipset
+```
+
+Removal also deletes AirDriver's modprobe blacklist and loads the in-kernel driver back,
+so your adapter falls back to the kernel's own driver rather than being left with none.
+DKMS entries are matched against the chipset database first, so unrelated modules
+(VirtualBox, NVIDIA) are never touched.
 
 ### Bundle drivers for offline use (do it while online)
 
@@ -222,6 +270,8 @@ airdriver install 0bda:c811 --offline   # force the bundled offline driver
 airdriver verify                # did the driver really install, load & bind?
 airdriver fix                   # reload the driver (depmod + modprobe) and re-check
 airdriver remove rtl8814au      # cleanly remove a driver to retry from scratch
+airdriver remove --all          # remove every driver AirDriver installed
+airdriver remove --all --dry-run  # …show what that would do, change nothing
 airdriver diagnose              # full snapshot to share when stuck (rfkill, dmesg, dkms…)
 airdriver monitor status        # show each interface's current mode
 airdriver monitor start wlan0   # enable monitor mode
@@ -339,7 +389,7 @@ with the `VID:PID` so it can be added to the database.
 
 ## Supported chipsets
 
-AirDriver knows **32 chipset families** spanning **759 USB/PCI IDs**. Capabilities are
+AirDriver knows **40 chipset families** spanning **858 USB/PCI IDs**. Capabilities are
 honest — some chips connect fine but can't inject, and AirDriver tells you up front.
 (Run `airdriver db` for the full list, or the **📚 Chipsets** browser in the GUI.)
 
@@ -392,11 +442,32 @@ honest — some chips connect fine but can't inject, and AirDriver tells you up 
 
 ### 💻 Internal laptop cards (PCIe) — fixes "no WiFi after install"
 
-| Chipset | Notes |
-|---|---|
-| RTL8821CE / RTL8822CE | very common Lenovo/HP/Acer cards — `rtw88`, connectivity only |
-| RTL8723DE | budget laptops — `rtw88`, connectivity only |
-| Intel AX200 / AX201 / AX210 / AX211 | `iwlwifi` — monitor works, injection unreliable |
+Most "my Wi-Fi doesn't work on Kali" reports are about the card already inside the
+laptop, so these are covered in depth. Note how few of them can inject — if a table row
+says **no**, no amount of reinstalling will change it, and you want a USB adapter from
+the [attack-grade](#-attack-grade--reliable-monitor-mode--injection) list instead.
+
+| Chipset | Covers | Driver | Monitor | Injection |
+|---|---|---|:--:|:--:|
+| **Atheros AR5416–AR9565** | Dell DW1520, ThinkPad AR9285, Compex WLE200NX | `ath9k` (in-kernel) | ✅ | 🏆 **excellent** |
+| MediaTek MT7921E / MT7922 / MT7925E | AMD laptops, RZ616 / RZ717 | `mt7921e` (6.6+) | ✅ | 🙂 fair |
+| Qualcomm QCA6174 / QCA9377 / QCA988x | Killer 1435, DW1810 | `ath10k` | ✅ | ❌ firmware limitation |
+| Intel 7260 / 7265 / 3165 / 8260 / 8265 / 9260 / 9560 | 2014–2020 laptops | `iwlwifi` | ✅ | ❌ |
+| Intel AX200 / AX201 / AX210 / AX211 | 2020+ laptops | `iwlwifi` | ✅ | ❌ |
+| Intel BE200 / BE201 (WiFi 7) | 2024+ laptops — needs kernel **6.7+** | `iwlwifi` | ✅ | ❌ |
+| RTL8852AE / 8852BE / 8852CE / 8922AE | 2022+ budget & gaming laptops | `rtw89` (5.16+) | ✅ | ❌ |
+| RTL8821CE / RTL8822CE / RTL8723DE | very common Lenovo/HP/Acer cards | `rtw88` | ✅ | ❌ |
+| RTL8188CE / 8192CE / 8723AE / 8723BE / 8821AE | older Realtek PCIe | `rtlwifi` | ✅ | ❌ |
+| **Broadcom BCM43xx** | MacBooks, DW1550, BCM43142 | `broadcom-sta-dkms` (`wl`) | ❌ | ❌ |
+
+> **Atheros `ath9k` is the one to have.** It's in-kernel, needs no firmware blob, and has
+> the most reliable monitor mode and injection of any chipset in the database — better
+> than most USB adapters people buy. If your laptop has one, you're already set.
+>
+> **Broadcom is the one to avoid.** The proprietary `wl` driver supports neither monitor
+> mode nor injection. AirDriver installs it so you at least get internet, and blacklists
+> the conflicting `b43`/`brcmsmac` modules — but for any real work, use a USB adapter.
+> Some pre-2012 cards do monitor fine on the open `b43` driver, which is worth a try.
 
 > The full database lives in [`airdriver/data/chipsets.json`](airdriver/data/chipsets.json)
 > and is trivial to extend — add a `VID:PID` or a whole chipset and AirDriver picks it up.
@@ -500,7 +571,7 @@ AirDriver/
 │   │   ├── chipset_db.py    detector.py   system.py    verify.py
 │   │   ├── installer.py     monitor.py    modules.py   report.py
 │   │   └── manage.py        # status · rebuild · sign · modeswitch · recommend
-│   ├── data/chipsets.json   # the chipset → driver database (32 families)
+│   ├── data/chipsets.json   # the chipset → driver database (40 families)
 │   ├── data/drivers/        # offline driver bundle (populated by script)
 │   ├── gui/             # PySide6 app (theme, main window)
 │   └── cli.py           # full-featured command line
@@ -518,12 +589,13 @@ AirDriver/
 - Bootable USB persistence profile
 - AppImage / `.deb` packaging
 
-Recently shipped in **v0.5.0 "Open Signal"**: painted vector icons (no emoji — buttons now
-render on a bare Kali install), `airdriver contribute` + a GUI **Report this adapter**
-button, and issue/PR templates with [CONTRIBUTING.md](CONTRIBUTING.md).
-Before that, **v0.4.0 "Field Kit"**: driver *management* — `status`, `rebuild`
-(kernel-upgrade repair), `sign` (Secure Boot), `modeswitch`, `recommend` — plus the chipset
-database grown to **32 families / 759 IDs** straight from the kernel's own device tables.
+Recently shipped in **v0.6.0 "Clean Sweep"**: **8 new internal-card families** (`ath9k`,
+`ath10k`, Intel 7260–BE200, `rtw89`, `rtlwifi`, MediaTek PCIe, Broadcom) taking the
+database to **40 families / 858 IDs**; a fix for `airdriver remove` **silently removing
+nothing**; `remove --all` and a real `uninstall.sh`; a one-line `curl | sudo bash` install;
+and resolution-independent button icons that hold up at every display scale.
+Before that, **v0.5.0 "Open Signal"**: painted vector icons, `airdriver contribute` + a GUI
+**Report this adapter** button, and issue/PR templates with [CONTRIBUTING.md](CONTRIBUTING.md).
 See the [CHANGELOG](CHANGELOG.md).
 
 ## License

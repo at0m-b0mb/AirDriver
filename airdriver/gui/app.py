@@ -94,8 +94,25 @@ def run() -> int:
         app = QApplication.instance() or QApplication(sys.argv)
         app.setApplicationName("AirDriver")
         app.setApplicationDisplayName("AirDriver")
+
+        # Pin the Fusion style unless the user explicitly asked for another one.
+        # Kali/Parrot commonly set QT_QPA_PLATFORMTHEME=gtk3 (or install qt6ct /
+        # Kvantum), and those themes re-style buttons with their own metrics and
+        # icon handling — which is how a carefully sized icon ends up clipped to
+        # nothing. Fusion is built into Qt, so this is also the one style we can
+        # be certain is present on a minimal install.
+        if not os.environ.get("QT_STYLE_OVERRIDE") and "-style" not in sys.argv:
+            app.setStyle("Fusion")
+
+        # "Inter" is a nice default but is not installed on a stock Kali/Parrot.
+        # Ask for it with real fallbacks so Qt lands on DejaVu Sans instead of
+        # whatever it picks when a single named family is missing.
+        font = QFont()
+        font.setFamilies(["Inter", "Cantarell", "Noto Sans", "DejaVu Sans", "sans-serif"])
+        font.setPointSize(10)
+        app.setFont(font)
+
         app.setStyleSheet(T.stylesheet())
-        app.setFont(QFont("Inter", 10))
 
         win = MainWindow()
         win.show()
