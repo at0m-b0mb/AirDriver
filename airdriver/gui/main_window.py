@@ -417,7 +417,9 @@ class MainWindow(QMainWindow):
         self.btn_install.setIconSize(icons.SIZE)
         self.btn_install.setEnabled(False)
         self.btn_install.clicked.connect(self.install_selected)
-        self.btn_plan = QPushButton("Preview plan")
+        self.btn_plan = QPushButton(icons.icon("eye"), "Preview plan")
+        self.btn_plan.setIconSize(icons.SIZE)
+        self.btn_plan.setToolTip("Show every command that would run, without changing anything")
         self.btn_plan.setEnabled(False)
         self.btn_plan.clicked.connect(self.preview_plan)
         self.btn_verify = QPushButton(icons.icon("check"), "Verify")
@@ -425,10 +427,14 @@ class MainWindow(QMainWindow):
         self.btn_verify.setToolTip("Check the driver is built, loaded and bound to the adapter")
         self.btn_verify.setEnabled(False)
         self.btn_verify.clicked.connect(self.verify_selected)
-        self.btn_remove = QPushButton(icons.icon("trash", colour=T.DIM), "Remove")
+        # A destructive action reads as destructive: the icon is tinted danger-red
+        # rather than the same grey as the label, which also keeps it legible on
+        # the transparent Ghost background.
+        self.btn_remove = QPushButton(icons.icon("trash", colour=T.DANGER), "Remove")
         self.btn_remove.setObjectName("Ghost")
         self.btn_remove.setIconSize(icons.SIZE)
-        self.btn_remove.setToolTip("Cleanly remove this driver (dkms/apt) so you can retry from scratch")
+        self.btn_remove.setToolTip("Cleanly remove this driver (dkms/apt), un-blacklist the "
+                                   "in-kernel one, and leave the system ready for a fresh install")
         self.btn_remove.setEnabled(False)
         self.btn_remove.clicked.connect(self.remove_selected)
         self.btn_copylog = QPushButton(icons.icon("clipboard"), "Copy log")
@@ -460,7 +466,7 @@ class MainWindow(QMainWindow):
         self.iface_combo.addItem("wlan0")
         self.btn_mon_on = QPushButton(icons.icon("waves", colour=T.ACCENT), "Enable")
         self.btn_mon_on.setToolTip("Put the interface into monitor mode (airmon-ng start / iw)")
-        self.btn_mon_off = QPushButton(icons.icon("stop", colour=T.DIM), "Disable")
+        self.btn_mon_off = QPushButton(icons.icon("stop", colour=T.TEXT), "Disable")
         self.btn_mon_off.setToolTip("Return the interface to managed mode")
         self.btn_mon_test = QPushButton(icons.icon("flask"), "Injection test")
         self.btn_mon_test.setToolTip("Run the aireplay-ng --test packet-injection self-check")
@@ -709,8 +715,12 @@ class MainWindow(QMainWindow):
 
     def _on_install_done(self, ok: bool):
         self._installing = False
-        self.log_line("\n" + ("✓ Install steps finished."
-                              if ok else "✗ Finished with errors — see log."))
+        # `ok` now means "every step succeeded", including the optional ones, so
+        # a false here is frequently just a skipped nicety rather than a failure.
+        # Say that plainly instead of shouting "errors" at the user.
+        self.log_line("\n" + ("✓ All steps finished successfully."
+                              if ok else "Finished — some optional steps were "
+                                         "skipped (details above)."))
         target = self._verify_after
         self._verify_after = None
         if target and target[0]:
@@ -932,23 +942,54 @@ class MainWindow(QMainWindow):
         lay.addWidget(view, 1)
 
         row = QHBoxLayout()
-        btn_rebuild = QPushButton("Rebuild for this kernel")
+        btn_rebuild = QPushButton(icons.icon("wrench"), "Rebuild for this kernel")
+        btn_rebuild.setIconSize(icons.SIZE)
         btn_rebuild.setToolTip("Rebuild DKMS modules against the running kernel — the fix "
                                "when Wi-Fi stops working after a system upgrade")
         btn_rebuild.setObjectName("Primary" if st.stale else "")
         btn_rebuild.clicked.connect(lambda: (dlg.accept(), self.run_rebuild()))
-        btn_sign = QPushButton("Sign for Secure Boot")
+        btn_sign = QPushButton(icons.icon("shield"), "Sign for Secure Boot")
+        btn_sign.setIconSize(icons.SIZE)
         btn_sign.setToolTip("Generate a signing key and sign the built modules so a "
                             "Secure Boot kernel will load them")
         btn_sign.clicked.connect(lambda: (dlg.accept(), self.run_sign()))
+        btn_purge = QPushButton(icons.icon("broom", colour=T.DANGER), "Remove all")
+        btn_purge.setObjectName("Ghost")
+        btn_purge.setIconSize(icons.SIZE)
+        btn_purge.setToolTip("Remove every Wi-Fi driver AirDriver installed and "
+                             "un-blacklist the in-kernel ones — back to a clean system")
+        btn_purge.clicked.connect(lambda: (dlg.accept(), self.run_purge()))
         btn_close = QPushButton("Close")
         btn_close.clicked.connect(dlg.accept)
         row.addWidget(btn_rebuild)
         row.addWidget(btn_sign)
         row.addStretch(1)
+        row.addWidget(btn_purge)
         row.addWidget(btn_close)
         lay.addLayout(row)
         dlg.exec()
+
+    def run_purge(self):
+        """Remove every driver AirDriver installed, after an explicit confirm."""
+        from ..core import manage
+        if self.sysinfo is None:
+            return
+        labels, _ = manage.purge_targets(self.db)
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Warning)
+        box.setWindowTitle("Remove all AirDriver drivers")
+        box.setText("Remove every Wi-Fi driver AirDriver installed?")
+        detail = ("\n".join(f"  - {label}" for label in labels)
+                  if labels else "  (no DKMS modules are currently registered)")
+        box.setInformativeText(
+            "This removes the out-of-tree drivers below, deletes AirDriver's modprobe "
+            "blacklist, and lets the in-kernel drivers bind again. In-kernel drivers "
+            "are never touched.\n\n" + detail)
+        box.setStandardButtons(QMessageBox.Yes | QMessageBox.Cancel)
+        box.setDefaultButton(QMessageBox.Cancel)
+        if box.exec() != QMessageBox.Yes:
+            return
+        self._run_management_plan(manage.build_purge_plan(self.db, self.sysinfo), "purge")
 
     def _run_management_plan(self, plan, what: str):
         if self._installing:

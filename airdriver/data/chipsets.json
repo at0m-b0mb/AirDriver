@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated": "2026-07-26",
+  "updated": "2026-08-02",
   "_about": "AirDriver chipset database. Maps USB/PCI VID:PID -> chipset -> driver install strategy. 'usb_ids' are lowercase 'vid:pid' (works for PCI ids too). 'kernel_native' tells AirDriver when an in-kernel driver already exists so it can SKIP a pointless DKMS build. 'drivers' are tried in 'priority' order (1 = first). 'monitor_mode'/'injection' are honest capability flags for pentest use; some chips connect fine but can't inject. Every usb_id is unique across the whole file (enforced by tests/test_chipset_db.py). Extend freely: add entries or usb_ids and AirDriver picks them up on next scan. PRs welcome at https://github.com/at0m-b0mb/AirDriver.",
   "injection_quality_scale": ["unknown", "poor", "fair", "good", "excellent"],
   "_id_sources": "USB IDs are taken from the Linux kernel's own driver device tables (rtl8xxxu, rt2800usb, ath9k_htc, carl9170, mt76*, rtw88/rtw89, rtl8187) and the morrownr supported-device-IDs lists for out-of-tree drivers. Do not invent ids: a wrong id installs the wrong driver.",
@@ -765,6 +765,180 @@
         {"method": "kernel_native", "module": "rt2800usb", "priority": 1}
       ],
       "blacklist": []
+    },
+    {
+      "id": "ath9k_pci",
+      "name": "Atheros AR9xxx (internal PCIe, ath9k)",
+      "vendor": "Qualcomm Atheros",
+      "wifi": "WiFi 4 (802.11n)",
+      "band": "Dual-band N (2.4 + 5 GHz, model dependent)",
+      "monitor_mode": true,
+      "injection": true,
+      "injection_quality": "excellent",
+      "notes": "The gold standard for internal cards: ath9k is in-kernel, needs no firmware blob, and has the most reliable monitor mode and injection of any chipset here. If your laptop has one of these, you already own the best adapter in the room. Covers AR5416/AR9160/AR9280/AR9285/AR9287/AR9380/AR9485/AR9462/AR9565.",
+      "adapters": [
+        "Dell DW1520", "Lenovo ThinkPad AR9285", "Compex WLE200NX", "AzureWave AR9280",
+        "HP AR9485"
+      ],
+      "usb_ids": [
+        "168c:0023", "168c:0024", "168c:0027", "168c:0029", "168c:002a", "168c:002b",
+        "168c:002c", "168c:002d", "168c:002e", "168c:0030", "168c:0032", "168c:0033",
+        "168c:0034", "168c:0036", "168c:0037"
+      ],
+      "kernel_native": {"module": "ath9k", "min_kernel": "2.6.32", "recommended_kernel": "5.10"},
+      "drivers": [
+        {"method": "kernel_native", "module": "ath9k", "priority": 1}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "ath10k_pci",
+      "name": "Qualcomm Atheros QCA6174 / QCA9377 / QCA988x (ath10k)",
+      "vendor": "Qualcomm Atheros",
+      "wifi": "WiFi 5 (802.11ac)",
+      "band": "Dual-band AC (2.4 + 5 GHz)",
+      "monitor_mode": true,
+      "injection": false,
+      "injection_quality": "poor",
+      "notes": "Extremely common in 2015-2020 laptops. Monitor mode works, but injection is unreliable-to-broken in the ath10k firmware — this is a firmware limitation, not a driver bug, so no amount of reinstalling fixes it. Use an external USB adapter for injection work. Needs the linux-firmware ath10k blobs.",
+      "adapters": ["Killer 1435", "Dell DW1810", "Lenovo QCA9377", "HP QCA6174"],
+      "usb_ids": [
+        "168c:003c", "168c:003e", "168c:0040", "168c:0041", "168c:0042", "168c:0046",
+        "168c:0050", "168c:0056"
+      ],
+      "kernel_native": {"module": "ath10k_pci", "min_kernel": "4.4", "recommended_kernel": "5.15", "firmware": "ath10k/*/firmware-*.bin"},
+      "drivers": [
+        {"method": "kernel_native", "module": "ath10k_pci", "priority": 1, "firmware_pkg": "firmware-atheros"}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "iwlwifi_legacy",
+      "name": "Intel Wireless 7260 / 7265 / 3165 / 8260 / 8265 / 9260 / 9560",
+      "vendor": "Intel",
+      "wifi": "WiFi 5 (802.11ac)",
+      "band": "Dual-band AC (2.4 + 5 GHz)",
+      "monitor_mode": true,
+      "injection": false,
+      "injection_quality": "poor",
+      "notes": "The internal card in a huge share of 2014-2020 laptops. The driver is in-kernel and 'just works' for normal Wi-Fi, but Intel firmware does not support packet injection and monitor mode is limited — you can sniff, mostly not inject. Keep it for connectivity and use a USB adapter for attacks. Needs the iwlwifi firmware package.",
+      "adapters": [
+        "Intel Wireless-AC 7260", "Intel Wireless-AC 8265", "Intel Wireless-AC 9560",
+        "Intel Dual Band Wireless-AC 3165"
+      ],
+      "usb_ids": [
+        "8086:08b1", "8086:08b2", "8086:095a", "8086:095b", "8086:3165", "8086:3166",
+        "8086:24f3", "8086:24f4", "8086:24fd", "8086:2526", "8086:271b", "8086:271c",
+        "8086:30dc", "8086:31dc", "8086:9df0", "8086:a370"
+      ],
+      "kernel_native": {"module": "iwlwifi", "min_kernel": "4.9", "recommended_kernel": "5.15", "firmware": "iwlwifi-*.ucode"},
+      "drivers": [
+        {"method": "kernel_native", "module": "iwlwifi", "priority": 1, "firmware_pkg": "firmware-iwlwifi"}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "intel_be200",
+      "name": "Intel WiFi 7 BE200 / BE201",
+      "vendor": "Intel",
+      "wifi": "WiFi 7 (802.11be)",
+      "band": "Tri-band BE (2.4 + 5 + 6 GHz)",
+      "monitor_mode": true,
+      "injection": false,
+      "injection_quality": "poor",
+      "notes": "Intel's WiFi 7 card, shipping in 2024+ laptops. Requires kernel 6.7 or newer plus current linux-firmware — on an older kernel it simply does not appear. As with every Intel part, injection is not supported. Note it is CNVi-based: it will not work in a plain M.2 slot on an AMD machine, which is a hardware limitation no driver can fix.",
+      "adapters": ["Intel BE200NGW", "Intel BE201"],
+      "usb_ids": ["8086:272b"],
+      "kernel_native": {"module": "iwlwifi", "min_kernel": "6.7", "recommended_kernel": "6.10", "firmware": "iwlwifi-be200-*.ucode"},
+      "drivers": [
+        {"method": "kernel_native", "module": "iwlwifi", "priority": 1, "firmware_pkg": "firmware-iwlwifi"}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "rtw89_pci",
+      "name": "Realtek RTL8852AE / RTL8852BE / RTL8852CE / RTL8922AE (internal PCIe)",
+      "vendor": "Realtek",
+      "wifi": "WiFi 6 / 6E / 7 (802.11ax / be)",
+      "band": "Dual/tri-band AX (2.4 + 5 + 6 GHz, model dependent)",
+      "monitor_mode": true,
+      "injection": false,
+      "injection_quality": "poor",
+      "notes": "Realtek's current internal Wi-Fi 6/6E/7 cards, very common in 2022+ budget and gaming laptops. In-kernel rtw89 handles them from 5.16 (8852AE) through 6.8 (8922AE); older kernels need a backport. Monitor mode works on recent kernels, injection is not usable yet.",
+      "adapters": ["RTL8852AE", "RTL8852BE", "RTL8852CE", "RTL8922AE", "RTL8851BE"],
+      "usb_ids": ["10ec:8852", "10ec:b852", "10ec:c852", "10ec:8922", "10ec:b851"],
+      "kernel_native": {"module": "rtw89_pci", "min_kernel": "5.16", "recommended_kernel": "6.8"},
+      "drivers": [
+        {"method": "kernel_native", "module": "rtw89_pci", "priority": 1},
+        {"method": "dkms_git", "repo": "https://github.com/lwfinger/rtw89", "module": "rtw89_pci", "priority": 2}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "rtlwifi_pci",
+      "name": "Realtek RTL8188CE / RTL8192CE / RTL8723AE / RTL8723BE / RTL8821AE",
+      "vendor": "Realtek",
+      "wifi": "WiFi 4/5 (802.11n / ac)",
+      "band": "2.4 GHz (5 GHz on 8821AE/8812AE)",
+      "monitor_mode": true,
+      "injection": false,
+      "injection_quality": "poor",
+      "notes": "Older internal Realtek PCIe cards, handled in-kernel by rtlwifi. They connect fine but are a poor pentest choice: injection does not work and monitor mode is flaky. If Wi-Fi is unstable on a RTL8723BE, the usual fix is the antenna-selection option: 'options rtl8723be ant_sel=2' in /etc/modprobe.d/.",
+      "adapters": ["Lenovo RTL8723BE", "HP RTL8188CE", "Acer RTL8821AE"],
+      "usb_ids": [
+        "10ec:8176", "10ec:8177", "10ec:8178", "10ec:8179", "10ec:8723", "10ec:b723",
+        "10ec:8812", "10ec:8821", "10ec:8192", "10ec:8171", "10ec:8172", "10ec:8173",
+        "10ec:8174"
+      ],
+      "kernel_native": {"module": "rtlwifi", "min_kernel": "3.10", "recommended_kernel": "5.10"},
+      "drivers": [
+        {"method": "kernel_native", "module": "rtlwifi", "priority": 1}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "mt79xx_pci",
+      "name": "MediaTek MT7921E / MT7922 / MT7925E (internal PCIe)",
+      "vendor": "MediaTek",
+      "wifi": "WiFi 6E / 7 (802.11ax / be)",
+      "band": "Tri-band (2.4 + 5 + 6 GHz)",
+      "monitor_mode": true,
+      "injection": true,
+      "injection_quality": "fair",
+      "notes": "MediaTek's internal counterpart to the MT7921AU dongles, common in AMD laptops. Unusually for an internal card, the mt76 driver supports active monitor mode and some injection — easily the best built-in option after ath9k. In-kernel from 5.15 (MT7921E) / 6.7 (MT7925E).",
+      "adapters": ["MediaTek MT7921E", "MediaTek MT7922 (RZ616)", "MediaTek MT7925E (RZ717)"],
+      "usb_ids": ["14c3:0608", "14c3:0616", "14c3:7961", "14c3:0717"],
+      "kernel_native": {"module": "mt7921e", "min_kernel": "5.15", "recommended_kernel": "6.6"},
+      "drivers": [
+        {"method": "kernel_native", "module": "mt7921e", "priority": 1}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "broadcom_sta",
+      "name": "Broadcom BCM43xx (internal, wl / b43)",
+      "vendor": "Broadcom",
+      "wifi": "WiFi 4/5 (802.11n / ac)",
+      "band": "Dual-band (model dependent)",
+      "monitor_mode": false,
+      "injection": false,
+      "injection_quality": "poor",
+      "notes": "The single most painful Wi-Fi family on Kali, and the honest answer is that it cannot do what you want: the proprietary 'wl' driver supports neither monitor mode nor injection. AirDriver installs broadcom-sta-dkms so you at least get working internet, and blacklists the conflicting b43/brcmsmac modules. Some older cards do monitor fine on the open b43 driver instead (firmware-b43-installer) — worth trying if yours is pre-2012. For any actual pentest work, use a USB adapter.",
+      "adapters": ["MacBook BCM4360", "Dell DW1550", "Lenovo BCM43142", "HP BCM4313"],
+      "usb_ids": [
+        "14e4:4311", "14e4:4312", "14e4:4313", "14e4:4315", "14e4:4318", "14e4:4319",
+        "14e4:4320", "14e4:4321", "14e4:4322", "14e4:4324", "14e4:4325", "14e4:4328",
+        "14e4:4329", "14e4:432a", "14e4:432b", "14e4:432c", "14e4:432d", "14e4:4331",
+        "14e4:4350", "14e4:4351", "14e4:4352", "14e4:4353", "14e4:4357", "14e4:4358",
+        "14e4:4359", "14e4:435a", "14e4:4360", "14e4:4365", "14e4:43a0", "14e4:43a1",
+        "14e4:43a2", "14e4:43b1", "14e4:43ba", "14e4:43bb", "14e4:43bc", "14e4:4727",
+        "14e4:a8d8"
+      ],
+      "drivers": [
+        {"method": "apt", "package": "broadcom-sta-dkms", "module": "wl", "priority": 1, "distro": ["kali", "parrot", "debian", "ubuntu"]},
+        {"method": "apt", "package": "firmware-b43-installer", "module": "b43", "priority": 2, "distro": ["kali", "parrot", "debian"]}
+      ],
+      "blacklist": ["b43", "b43legacy", "ssb", "brcmsmac"]
     }
   ]
 }

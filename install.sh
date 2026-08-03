@@ -36,6 +36,33 @@ IS_ROOT=0; [ "$(id -u)" -eq 0 ] && IS_ROOT=1
 # The real user, so a venv made under sudo isn't left root-owned.
 REAL_USER="${SUDO_USER:-$(id -un)}"
 
+# --- 0. bootstrap when piped from curl --------------------------------------
+# Makes the one-liner work:
+#   curl -fsSL https://raw.githubusercontent.com/at0m-b0mb/AirDriver/main/install.sh | sudo bash
+# When there's no checkout next to this script, fetch one and re-exec from it.
+REPO_URL="https://github.com/at0m-b0mb/AirDriver.git"
+CLONE_DIR="${AIRDRIVER_DIR:-/opt/airdriver}"
+if [ ! -f "$HERE/pyproject.toml" ]; then
+  say "No local checkout found — fetching AirDriver into $CLONE_DIR …"
+  if ! command -v git >/dev/null 2>&1; then
+    if [ "$IS_ROOT" -eq 1 ] && command -v apt-get >/dev/null 2>&1; then
+      apt-get update -qq || true
+      apt-get install -y git || { err "Could not install git."; exit 1; }
+    else
+      err "git is required. Install it first:  sudo apt install -y git"
+      exit 1
+    fi
+  fi
+  if [ -d "$CLONE_DIR/.git" ]; then
+    git -C "$CLONE_DIR" pull --ff-only || warn "Could not update the existing clone."
+  else
+    mkdir -p "$(dirname "$CLONE_DIR")"
+    git clone --depth=1 "$REPO_URL" "$CLONE_DIR" || { err "Clone failed."; exit 1; }
+  fi
+  ok "Source at $CLONE_DIR"
+  exec bash "$CLONE_DIR/install.sh" "$@"
+fi
+
 # --- 1. system prerequisites (needs root; best-effort) ----------------------
 if command -v apt-get >/dev/null 2>&1; then
   if [ "$IS_ROOT" -eq 1 ]; then

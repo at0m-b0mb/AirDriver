@@ -322,12 +322,21 @@ def cmd_verify(args, db: ChipsetDB) -> int:
 
 def cmd_remove(args, db: ChipsetDB) -> int:
     info = system.gather()
+    if getattr(args, "all", False):
+        return _remove_all(args, db, info)
+    if not args.target:
+        print(red("Say what to remove, or use --all to clear every AirDriver driver."))
+        print(dim("  airdriver remove rtl8812au      airdriver remove --all"))
+        return 1
     chip, _ = _resolve_chip(args.target, db)
     if chip is None:
         print(red(f"'{args.target}' is not a known adapter or chipset."))
         return 1
     plan = build_remove_plan(chip, info)
     print(plan.describe())
+    if getattr(args, "dry_run", False):
+        print(yellow("\n(dry run — nothing executed)"))
+        return 0
     if not args.yes:
         if input(bold("\nRemove the above? [y/N] ")).strip().lower() not in ("y", "yes"):
             print("Aborted.")
@@ -335,6 +344,36 @@ def cmd_remove(args, db: ChipsetDB) -> int:
     ok = Executor(info).run(plan, log=print)
     print(green("\n✓ Removed. Re-plug the adapter, then: airdriver install "
                 f"{chip.id}") if ok else yellow("\nRemoval finished with warnings."))
+    return 0 if ok else 2
+
+
+def _remove_all(args, db: ChipsetDB, info) -> int:
+    """`airdriver remove --all` — one command to get back to a clean system."""
+    if not info.is_linux:
+        print(yellow("Removing drivers only means something on Linux."))
+        return 1
+    labels, _pkgs = manage.purge_targets(db)
+    plan = manage.build_purge_plan(db, info)
+    print(bold("\nRemove every AirDriver-installed Wi-Fi driver\n"))
+    if labels:
+        print(f"  {len(labels)} DKMS module(s) will be removed:")
+        for label in labels:
+            print(cyan(f"    {label}"))
+    else:
+        print(dim("  No AirDriver-managed DKMS modules are registered."))
+    print()
+    print(plan.describe())
+    if getattr(args, "dry_run", False):
+        print(yellow("\n(dry run — nothing executed)"))
+        return 0
+    if not args.yes:
+        if input(bold("\nRemove all of the above? [y/N] ")).strip().lower() not in ("y", "yes"):
+            print("Aborted.")
+            return 1
+    ok = Executor(info).run(plan, log=print)
+    print(green("\n✓ Clean. Your adapters will fall back to their in-kernel drivers "
+                "— re-plug them, or reboot.") if ok
+          else yellow("\nFinished with warnings — see the log above."))
     return 0 if ok else 2
 
 
@@ -615,8 +654,12 @@ def build_parser() -> argparse.ArgumentParser:
     pvf.add_argument("target", nargs="?", help="usb id / chipset id (default: first detected)")
 
     prm = sub.add_parser("remove", help="Cleanly remove a driver (for a fresh retry)")
-    prm.add_argument("target", help="usb id or chipset id")
+    prm.add_argument("target", nargs="?", help="usb id or chipset id")
+    prm.add_argument("--all", action="store_true",
+                     help="Remove EVERY driver AirDriver installed, and un-blacklist "
+                          "the in-kernel ones")
     prm.add_argument("--yes", "-y", action="store_true", help="Don't prompt")
+    prm.add_argument("--dry-run", action="store_true", help="Show the plan, change nothing")
 
     pfx = sub.add_parser("fix", help="Reload the driver (depmod + modprobe) and re-check")
     pfx.add_argument("target", nargs="?", help="usb id / chipset id (default: first detected)")
