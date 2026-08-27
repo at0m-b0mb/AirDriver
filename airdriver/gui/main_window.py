@@ -608,7 +608,13 @@ class MainWindow(QMainWindow):
         while self.cards_l.count():
             self.cards_l.takeAt(0)
         if not adapters:
-            empty = QLabel("No WiFi adapters detected.\nPlug one in and press Rescan.")
+            # Reachable on Linux now that a missing `lsusb` no longer swaps in
+            # demo adapters, so the empty state has to earn its place.
+            empty = QLabel(
+                "No WiFi adapters detected.\n\n"
+                "Plug one in and press Rescan. High-power cards want USB 3.0\n"
+                "or a powered hub. Some dongles appear as a driver CD-ROM\n"
+                "first — those need:  sudo airdriver modeswitch")
             empty.setObjectName("Dim")
             empty.setAlignment(Qt.AlignCenter)
             self.cards_l.addWidget(empty)

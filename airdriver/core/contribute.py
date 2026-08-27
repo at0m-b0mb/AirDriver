@@ -20,6 +20,7 @@ import urllib.parse
 from dataclasses import dataclass
 from typing import Optional
 
+from . import detector
 from .chipset_db import ChipsetDB
 from .system import SystemInfo
 
@@ -55,6 +56,55 @@ def _lsusb_verbose(usb_id: str) -> str:
             "iProduct", "bDeviceClass", "bInterfaceClass")
     lines = [l.strip() for l in out.splitlines() if any(k in l for k in keep)]
     return "\n".join(dict.fromkeys(lines))[:900]
+
+
+# Descriptor attributes worth reporting. `serial` is deliberately absent: this
+# report is destined for a public GitHub issue, and a device serial number
+# identifies one physical adapter (and, with it, its owner).
+_SYSFS_DEVICE_ATTRS = ("idVendor", "idProduct", "bcdDevice", "manufacturer",
+                       "product", "bDeviceClass", "bDeviceSubClass",
+                       "bNumInterfaces", "speed", "version")
+_SYSFS_IFACE_ATTRS = ("bInterfaceClass", "bInterfaceSubClass", "bInterfaceProtocol")
+
+
+def _sysfs_descriptors(usb_id: str, sysfs_root: str = detector.SYSFS_ROOT) -> str:
+    """USB descriptors read straight from sysfs, for hosts without usbutils.
+
+    This is what keeps `airdriver contribute` useful on a minimal Kali/Parrot
+    install. Without it the report for an unknown adapter arrives carrying no
+    descriptors at all — which are precisely the fields a maintainer needs in
+    order to add the chipset to the database.
+    """
+    base = os.path.join(sysfs_root, "bus", "usb", "devices")
+    if not os.path.isdir(base):
+        return ""
+    want_vid, _, want_pid = usb_id.lower().partition(":")
+    try:
+        entries = sorted(os.listdir(base))
+    except OSError:
+        return ""
+    for entry in entries:
+        if ":" in entry:
+            continue
+        dev = os.path.join(base, entry)
+        vid = detector._hex4(detector._read(os.path.join(dev, "idVendor")))
+        pid = detector._hex4(detector._read(os.path.join(dev, "idProduct")))
+        if vid != want_vid or pid != want_pid:
+            continue
+        lines = [f"{entry}:"]
+        for attr in _SYSFS_DEVICE_ATTRS:
+            val = detector._read(os.path.join(dev, attr))
+            if val:
+                lines.append(f"  {attr:<16} {val}")
+        for iface_name in sorted(e for e in entries if e.startswith(entry + ":")):
+            idir = os.path.join(base, iface_name)
+            vals = [(a, detector._read(os.path.join(idir, a))) for a in _SYSFS_IFACE_ATTRS]
+            vals = [(a, v) for a, v in vals if v]
+            if vals:
+                lines.append(f"  interface {iface_name}:")
+                lines += [f"    {a:<20} {v}" for a, v in vals]
+        return "\n".join(lines)[:900]
+    return ""
 
 
 def _dmesg_for(usb_id: str) -> str:
@@ -132,6 +182,13 @@ def build(adapter, info: SystemInfo, db: ChipsetDB) -> Report:
     if verbose:
         lines += ["", "<details><summary>lsusb -v (descriptors)</summary>", "",
                   "```", verbose, "```", "", "</details>"]
+    elif not lsusb:
+        # No usbutils on this box — read the same descriptors out of sysfs so
+        # the report is still actionable.
+        sysfs = _sysfs_descriptors(usb_id)
+        if sysfs:
+            lines += ["", "<details><summary>sysfs descriptors (usbutils not installed)"
+                      "</summary>", "", "```", sysfs, "```", "", "</details>"]
     dmesg = _dmesg_for(usb_id)
     if dmesg:
         lines += ["", "<details><summary>dmesg</summary>", "",

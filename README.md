@@ -83,8 +83,13 @@ them on an air-gapped machine.
 
 ## Features
 
-- 🔍 **Auto-detection** — enumerates USB (`lsusb`) and PCI (`lspci`) adapters, reads
-  live wireless interfaces from sysfs, and maps `VID:PID` → chipset.
+- 🔍 **Auto-detection, straight from the kernel** — USB and PCI devices are read out of
+  **sysfs**, not scraped from `lsusb`/`lspci`, so detection is complete on a minimal
+  install with no `usbutils`/`pciutils` (they're used when present, only to borrow their
+  vendor-resolved product names). Live wireless interfaces are correlated to the adapter
+  that owns them **by sysfs device path**, so with an internal card *and* a dongle
+  plugged in each interface lands on the right one. Ethernet NICs, Bluetooth radios and
+  root hubs are filtered out by device class — never offered a Wi-Fi driver.
 - 🧠 **Smart driver selection** — prefers the **in-kernel** driver when your kernel is
   new enough (no pointless DKMS build), otherwise apt → DKMS-from-git → offline bundle.
   For out-of-tree drivers it runs the maintainer's own `install-driver.sh` (morrownr /
@@ -134,7 +139,8 @@ them on an air-gapped machine.
 - 📄 **Diagnostic reports** — export JSON + Markdown, perfect for forum help threads.
 - ❓ **Unknown-adapter flow** — if your `VID:PID` isn't known yet, pick the closest chipset
   to try, then hit **Report this adapter** (or `airdriver contribute`) and AirDriver writes
-  the whole bug report for you — `lsusb`, kernel, `dmesg` and all.
+  the whole bug report for you — USB descriptors, kernel, `dmesg` and all (and never
+  your adapter's serial number, since the report goes to a public issue).
 - 🖌️ **Renders on a bare box** — every icon is drawn with QPainter, not emoji, so the UI
   looks right on a minimal Kali install with no emoji font installed.
 
@@ -172,8 +178,9 @@ sudo ./install.sh
 ```
 
 The installer:
-- installs system prerequisites — `dkms`, `build-essential`, kernel headers,
-  `usbutils`, `pciutils`, `iw`, `aircrack-ng`, …
+- installs system prerequisites — `dkms`, `build-essential`, kernel headers, `iw`,
+  `aircrack-ng`, … plus `usbutils`/`pciutils`, which are **optional**: detection reads
+  sysfs directly and works without them.
 - installs the **Qt runtime libraries** the GUI needs (the usual cause of
   *"installed but the window won't open"*),
 - creates an isolated virtualenv and installs the GUI (PySide6),
@@ -504,8 +511,9 @@ airdriver contribute            # prints the report + a pre-filled issue link
 airdriver contribute --open     # …and opens it in your browser
 ```
 
-It collects the `vid:pid`, `lsusb` descriptors, your kernel and distro, and the matching
-`dmesg` lines. In the GUI, select the adapter and press **Report this adapter**.
+It collects the `vid:pid`, the USB descriptors (from `lsusb -v`, or from sysfs when
+`usbutils` isn't installed — never the serial number), your kernel and distro, and the
+matching `dmesg` lines. In the GUI, select the adapter and press **Report this adapter**.
 
 > **Nothing is sent automatically.** The report describes your machine, so AirDriver shows
 > it to you and pre-fills the form — you decide whether to submit.
@@ -534,7 +542,8 @@ The whole database is one JSON file — no code changes needed. Add an entry (or
 }
 ```
 
-Find your adapter's ID with `lsusb` (USB) or `lspci -nn` (PCI), then open a PR — or an
+Find your adapter's ID with `airdriver scan` (it lists unrecognised devices too), then
+open a PR — or an
 issue with the ID and we'll add it. Every `vid:pid` must be **unique across the whole
 file** (a duplicate silently mis-identifies hardware); `airdriver db --check` and the
 test-suite enforce that, so run it before opening a PR.
@@ -545,7 +554,7 @@ The core + CLI are pure standard library, so the tests need **no dependencies**:
 
 ```bash
 python -m airdriver db --check           # validate the chipset database
-python -m unittest discover -s tests -v  # run the suite (DB, installer, CLI)
+python -m unittest discover -s tests -v  # run the suite (DB, detector, installer, CLI)
 ```
 
 Both run in [CI](../../actions) on every push across Python 3.9–3.13, plus a headless
@@ -575,7 +584,7 @@ AirDriver/
 │   ├── data/drivers/        # offline driver bundle (populated by script)
 │   ├── gui/             # PySide6 app (theme, main window)
 │   └── cli.py           # full-featured command line
-├── tests/               # stdlib unittest suite (DB, installer, CLI)
+├── tests/               # stdlib unittest suite (DB, detector, installer, CLI)
 ├── scripts/             # fetch_offline_drivers.sh · gen_screenshots.py
 ├── .github/workflows/   # CI (tests + GUI smoke, py3.9–3.13)
 ├── install.sh           # full system installer
@@ -589,13 +598,16 @@ AirDriver/
 - Bootable USB persistence profile
 - AppImage / `.deb` packaging
 
-Recently shipped in **v0.6.0 "Clean Sweep"**: **8 new internal-card families** (`ath9k`,
+Recently shipped in **v0.7.0 "Ground Truth"**: detection rewritten to read **sysfs
+directly** — a missing `lsusb` used to make AirDriver fall back to *demo mode* and
+present three fabricated adapters on real hardware; wireless interfaces are now matched
+to adapters **by sysfs device path** instead of being handed to the first PCI card, which
+is what made the wrong adapter show as "Working"; and Ethernet NICs, Bluetooth radios and
+root hubs are filtered out by device class.
+Before that, **v0.6.0 "Clean Sweep"**: **8 new internal-card families** (`ath9k`,
 `ath10k`, Intel 7260–BE200, `rtw89`, `rtlwifi`, MediaTek PCIe, Broadcom) taking the
 database to **40 families / 858 IDs**; a fix for `airdriver remove` **silently removing
-nothing**; `remove --all` and a real `uninstall.sh`; a one-line `curl | sudo bash` install;
-and resolution-independent button icons that hold up at every display scale.
-Before that, **v0.5.0 "Open Signal"**: painted vector icons, `airdriver contribute` + a GUI
-**Report this adapter** button, and issue/PR templates with [CONTRIBUTING.md](CONTRIBUTING.md).
+nothing**; `remove --all` and a real `uninstall.sh`; and resolution-independent icons.
 See the [CHANGELOG](CHANGELOG.md).
 
 ## License

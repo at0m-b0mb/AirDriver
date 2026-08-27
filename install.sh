@@ -3,7 +3,7 @@
 #  AirDriver installer  ·  Kali / Parrot / Debian / Ubuntu
 #
 #  Sets up everything you need and drops an `airdriver` command on your PATH:
-#    • system prerequisites (dkms, headers, usbutils, aircrack-ng, Qt libs…)
+#    • system prerequisites (dkms, headers, iw, aircrack-ng, Qt libs…)
 #    • an isolated Python virtualenv with the GUI (PySide6)
 #    • a smart launcher that even makes `sudo airdriver` open the GUI correctly
 #
@@ -69,7 +69,9 @@ if command -v apt-get >/dev/null 2>&1; then
     say "Installing system prerequisites (this can take a minute)…"
     apt-get update -qq || warn "apt update failed (offline?) — continuing."
 
-    # Build toolchain + pentest tooling + USB/PCI enumeration.
+    # Build toolchain + pentest tooling. usbutils/pciutils are a convenience,
+    # not a requirement: AirDriver enumerates hardware from sysfs and only uses
+    # lsusb/lspci, when present, for their vendor-resolved product names.
     BUILD_PKGS=(python3 python3-venv python3-pip
                 dkms build-essential bc libelf-dev git pkg-config
                 usbutils pciutils iw wireless-tools rfkill aircrack-ng

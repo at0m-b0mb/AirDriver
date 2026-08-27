@@ -26,6 +26,51 @@ def _linux(**over):
     return SystemInfo(**base)
 
 
+class ModeswitchRescan(unittest.TestCase):
+    """The rescan step is how a user learns the adapter's *new* USB id after a
+    flip-storage dongle is switched. It reads sysfs rather than lsusb, because
+    usbutils is not guaranteed on a minimal install — so run the real loop
+    against a fake tree and prove it lists devices and skips root hubs."""
+
+    def _rescan_shell(self):
+        plan = manage.build_modeswitch_plan("0bda:1a2b")
+        step = next(s for s in plan.steps if "Re-scan" in s.title)
+        return step.shell
+
+    def test_lists_devices_and_skips_root_hubs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp) / "bus" / "usb" / "devices"
+            for name, vid, pid, product in (
+                    ("usb1", "1d6b", "0002", "xHCI Host Controller"),
+                    ("1-1", "0bda", "8812", "802.11ac WLAN Adapter"),
+                    ("1-2", "046d", "c52b", "USB Receiver")):
+                d = base / name
+                d.mkdir(parents=True)
+                (d / "idVendor").write_text(vid + "\n")
+                (d / "idProduct").write_text(pid + "\n")
+                (d / "product").write_text(product + "\n")
+            shell = self._rescan_shell().replace("/sys/bus/usb/devices",
+                                                 str(base)).replace("sleep 2", "true")
+            r = subprocess.run(["bash", "-c", shell], capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertIn("0bda:8812", r.stdout)
+            self.assertIn("802.11ac WLAN Adapter", r.stdout)
+            self.assertIn("046d:c52b", r.stdout)
+            # Root hubs are never adapters and would only be noise.
+            self.assertNotIn("1d6b", r.stdout)
+            self.assertIn("airdriver scan", r.stdout)
+
+    def test_survives_an_empty_bus(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp) / "bus" / "usb" / "devices"
+            base.mkdir(parents=True)
+            shell = self._rescan_shell().replace("/sys/bus/usb/devices",
+                                                 str(base)).replace("sleep 2", "true")
+            r = subprocess.run(["bash", "-c", shell], capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertIn("airdriver scan", r.stdout)
+
+
 class DkmsParsing(unittest.TestCase):
     """`dkms status` output has changed shape across dkms versions."""
 

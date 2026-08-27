@@ -92,6 +92,14 @@ def cmd_scan(args, db: ChipsetDB) -> int:
         return 0
     if not adapters:
         print(yellow("No WiFi adapters detected."))
+        if detector.have_sysfs():
+            print(dim("  · Re-plug it, or try another port — high-power cards "
+                      "(AWUS036ACH,\n    AWUS1900) want USB 3.0 or a powered hub."))
+            print(dim("  · Some dongles enumerate as a driver CD-ROM first and are "
+                      "not a\n    Wi-Fi device until switched:  sudo airdriver modeswitch"))
+            print(dim("  · An adapter that is present but unrecognised still shows "
+                      "up here,\n    so an empty list means the kernel sees no "
+                      "wireless hardware at all."))
         return 0
     print(bold(f"\nDetected {len(adapters)} adapter(s):\n"))
     for a in adapters:

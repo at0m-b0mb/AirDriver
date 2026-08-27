@@ -4,6 +4,8 @@ Two things matter here: the report must contain what a maintainer needs, and the
 URL must be a real, correctly-encoded GitHub issue link (it's the whole point of
 the feature — a broken link means the report never arrives).
 """
+import os
+import tempfile
 import unittest
 import urllib.parse
 
@@ -79,6 +81,52 @@ class IssueUrl(unittest.TestCase):
     def test_short_url_fallback(self):
         self.assertIn("issues/new", self.rep.short_url)
         self.assertNotIn(" ", self.rep.short_url)
+
+
+class SysfsDescriptorFallback(unittest.TestCase):
+    """Without usbutils there is no `lsusb -v`, and the report used to carry no
+    descriptors at all — the exact fields needed to add a new chipset. sysfs
+    has them, so read them there instead."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.base = os.path.join(self._tmp.name, "bus", "usb", "devices")
+        os.makedirs(os.path.join(self.base, "1-1"))
+        os.makedirs(os.path.join(self.base, "1-1:1.0"))
+        for name, val in (("idVendor", "1a2b"), ("idProduct", "3c4d"),
+                          ("bcdDevice", "2.00"), ("manufacturer", "Realtek"),
+                          ("product", "802.11ac WLAN Adapter"), ("speed", "480"),
+                          ("serial", "00e04c000001")):
+            with open(os.path.join(self.base, "1-1", name), "w") as fh:
+                fh.write(val + "\n")
+        with open(os.path.join(self.base, "1-1:1.0", "bInterfaceClass"), "w") as fh:
+            fh.write("ff\n")
+
+    def _descriptors(self, usb_id="1a2b:3c4d"):
+        return contribute._sysfs_descriptors(usb_id, sysfs_root=self._tmp.name)
+
+    def test_reports_the_descriptors_a_maintainer_needs(self):
+        out = self._descriptors()
+        self.assertIn("idVendor", out)
+        self.assertIn("1a2b", out)
+        self.assertIn("802.11ac WLAN Adapter", out)
+        self.assertIn("bcdDevice", out)
+        self.assertIn("bInterfaceClass", out)
+
+    def test_serial_number_is_never_collected(self):
+        """The report goes into a public issue; a serial identifies one
+        physical adapter and, through it, its owner."""
+        out = self._descriptors()
+        self.assertNotIn("00e04c000001", out)
+        self.assertNotIn("serial", out)
+
+    def test_unmatched_id_returns_nothing(self):
+        self.assertEqual(self._descriptors("dead:beef"), "")
+
+    def test_missing_sysfs_returns_nothing(self):
+        self.assertEqual(
+            contribute._sysfs_descriptors("1a2b:3c4d", sysfs_root="/nonexistent"), "")
 
 
 if __name__ == "__main__":

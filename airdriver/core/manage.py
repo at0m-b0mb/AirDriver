@@ -457,7 +457,21 @@ def build_modeswitch_plan(usb_id: str) -> InstallPlan:
                f'the adapter, or run: sudo usb_modeswitch -KW -v {vid} -p {pid}"')))
     plan.steps.append(Step(
         title="Re-scan the USB bus",
-        shell="sleep 2; lsusb | grep -iE 'wireless|wlan|802.11|realtek|ralink|atheros|mediatek' || true",
+        # Read sysfs rather than shelling out to lsusb: usbutils is not
+        # guaranteed on a minimal Kali/Parrot install, and this step is how the
+        # user learns the adapter's *new* id after the switch.
+        shell=('sleep 2\n'
+               'for d in /sys/bus/usb/devices/*/idVendor; do\n'
+               '  [ -e "$d" ] || continue\n'
+               '  dev="$(dirname "$d")"\n'
+               '  v="$(cat "$d" 2>/dev/null)"\n'
+               '  p="$(cat "$dev/idProduct" 2>/dev/null)"\n'
+               '  # Skip root hubs (Linux Foundation), they are never adapters.\n'
+               '  { [ -n "$v" ] && [ "$v" != "1d6b" ]; } || continue\n'
+               '  n="$(cat "$dev/product" 2>/dev/null)"\n'
+               '  echo "  $v:$p  $n"\n'
+               'done\n'
+               'echo "[airdriver] now run:  airdriver scan"'),
         optional=True))
     plan.warnings.append(
         "After switching, the adapter appears with a DIFFERENT USB id — run "

@@ -2,6 +2,86 @@
 
 All notable changes to AirDriver are documented here.
 
+## [0.7.0] — 2026-08-27 · "Ground Truth"
+
+Detection now reads the kernel's own view of your hardware instead of shelling out to
+tools that may not be installed — and stops inventing adapters when they aren't.
+
+### Fixed — AirDriver invented hardware on a minimal install
+
+- **A missing `lsusb` made AirDriver fabricate three adapters.** Detection shelled out
+  to `lsusb`, and when the binary wasn't found it fell back to *demo mode* — the
+  synthetic RTL8812AU / AR9271 / unknown-device trio meant for previewing the GUI on a
+  macOS dev box. `lsusb` lives in `usbutils`, which a minimal Kali or Parrot install
+  does not necessarily ship. The result on such a box: three plausible adapters that
+  don't exist, presented over real hardware that was sitting in sysfs the whole time,
+  and a GUI status chip reading *"demo mode (non-Linux)"* on Linux. Worse, acting on it
+  installs a driver for a chipset you don't own.
+
+  Enumeration is now **sysfs-native** — `/sys/bus/usb/devices` and
+  `/sys/bus/pci/devices` are read directly. sysfs is part of the kernel, so it is always
+  there. Demo adapters are returned **only** when there is no sysfs at all, i.e. genuinely
+  not Linux. On Linux an empty result now means *"the kernel sees no wireless hardware"*,
+  which is a real answer, and both the CLI and the GUI say what to try next.
+- **`usbutils` and `pciutils` are no longer required.** They are still used when present,
+  purely to borrow their vendor-resolved product names (`lsusb` turns `0bda:8812` into
+  "Realtek Semiconductor Corp. RTL8812AU"; sysfs only knows the device's own string
+  descriptor, "802.11n NIC"). Detection is complete without them.
+
+### Fixed — the wrong adapter was reported as working
+
+- **Interfaces were paired with adapters by guesswork.** Any wireless interface that
+  couldn't be matched by USB id was handed to the first PCI adapter in the list, via a
+  literal `leftover.pop(0)`. With an internal card *and* a USB dongle plugged in — the
+  normal pentest setup — the dongle's `wlan1` could be reported against the internal
+  card. The adapter you were trying to fix showed **"Working — wlan1"** while the one
+  that actually worked showed as dead, which sends you debugging the wrong device.
+
+  Correlation is now by **sysfs device path**, which is exact: a netdev's `device`
+  symlink is resolved and walked up to the owning device (one hop for USB, where the
+  netdev hangs off the interface directory). USB-id matching remains as a fallback, and
+  the last-resort pairing only fires when it is unambiguous — exactly one unmatched
+  adapter and exactly one unmatched interface. Anything less certain is left unpaired
+  rather than guessed at, because "no interface" is honest and a wrong one is not.
+
+### Fixed — Ethernet and Bluetooth are no longer mistaken for Wi-Fi
+
+- PCI devices are filtered on **class 0x0280** (wireless network controller), so an
+  Ethernet NIC (subclass 0x00) is never offered a Wi-Fi driver. Previously any `lspci`
+  line containing "network" qualified.
+- An unknown USB device is surfaced when it declares **interface class 0xE0** (wireless
+  controller) — but **subclass 0x01 within it is Bluetooth**, which is excluded. Every
+  second laptop has one, and it is not a Wi-Fi adapter.
+- USB root hubs (vendor `1d6b`, Linux Foundation) are skipped outright.
+- Two PCI cards now keep distinct identities: the domain-qualified slot
+  (`0000:03:00.0`) is recorded instead of an empty string.
+
+### Improved
+
+- **`airdriver contribute` works without usbutils.** The report for an unknown adapter
+  is the only way a new chipset reaches the database, and without `lsusb -v` it used to
+  arrive carrying no descriptors at all — precisely the fields a maintainer needs. The
+  same descriptors are now read from sysfs as a fallback. The device **serial number is
+  deliberately never collected**: the report is destined for a public issue, and a
+  serial identifies one physical adapter and through it its owner.
+- **`airdriver modeswitch`'s rescan step** lists devices from sysfs rather than piping
+  `lsusb` through `grep`, so the step that tells you the dongle's *new* USB id still
+  works on the minimal install where flip-storage dongles are most likely to turn up.
+- **An empty scan is now actionable** — port/hub advice for high-power cards, the
+  driver-CD-ROM case, and a note that unrecognised adapters still show up, so an empty
+  list really does mean no wireless hardware.
+
+### Tests
+
+- New `tests/test_detector.py`: 20 tests over a **real fake sysfs tree** built on disk
+  (real directories, real symlinks) and enumerated for real — nothing about sysfs parsing
+  is mocked. Covers the demo-mode boundary in both directions, Bluetooth/Ethernet/root-hub
+  exclusion, description precedence, and the two-device correlation case that used to
+  mis-attribute.
+- The modeswitch rescan loop is executed end-to-end against a fake bus, and the sysfs
+  descriptor fallback is tested including the assertion that no serial number leaks.
+- **101 tests** (was 75), all green on Python 3.9 / 3.11 / 3.13.
+
 ## [0.6.0] — 2026-08-02 · "Clean Sweep"
 
 Teaches AirDriver about the Wi-Fi card that's already **inside** your laptop, makes
