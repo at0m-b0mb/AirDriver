@@ -482,15 +482,38 @@ the [attack-grade](#-attack-grade--reliable-monitor-mode--injection) list instea
 
 ## How driver selection works
 
-```
-detect adapter ─► match VID:PID ─► chipset
-                                     │
-            ┌────────────────────────┼─────────────────────────────┐
-   in-kernel driver exists      online?                        offline bundle
-   & kernel new enough           │   │                          present?
-        │                       yes  no                            │
-   load + verify            apt pkg   └─► DKMS from git ◄───────────┘
-   (no build)               (fast)        (compile + dkms install)
+```mermaid
+flowchart TD
+    A([Plug in the adapter]) --> B["Enumerate USB + PCI<br/>straight from sysfs"]
+    B --> C{"VID:PID in the<br/>chipset database?"}
+    C -->|no| Z["airdriver contribute —<br/>a pre-filled report,<br/>so the database learns it"]
+    C -->|yes| D{"In-kernel driver,<br/>and a new enough kernel?"}
+
+    D -->|yes| K["Load it — no build at all"]
+    D -->|no| P{"Best feasible method,<br/>in priority order"}
+
+    P -->|"apt · online + Debian"| APT["Install the distro<br/>DKMS package"]
+    P -->|"dkms_git · online"| GIT["Compile the<br/>maintainer's driver"]
+    P -->|"offline · bundle present"| OFF["Compile the<br/>bundled source"]
+    P -->|none feasible| NONE["Say so plainly —<br/>and why each option failed"]
+    APT -.->|"missing, or lagging<br/>behind your kernel"| GIT
+
+    K --> X
+    APT --> X
+    GIT --> X
+    OFF --> X
+    X["Blacklist conflicts · depmod · modprobe<br/>rfkill unblock · ip link up · nmcli radio on"]
+
+    X --> V{"Verify — built?<br/>loaded? interface bound?"}
+    V -->|yes| OK([Working adapter])
+    V -->|no| BAD["The honest verdict, and the exact fix:<br/>rfkill-blocked · Secure Boot ·<br/>built-but-not-loaded · no interface"]
+
+    classDef good fill:#1f9e72,stroke:#0f5f45,color:#ffffff
+    classDef work fill:#38bdf8,stroke:#0b6a94,color:#04212e
+    classDef warn fill:#f5a623,stroke:#8a5a05,color:#2b1a00
+    class A,K,OK good
+    class B,X,APT,GIT,OFF work
+    class Z,BAD,NONE warn
 ```
 
 Before any build, AirDriver verifies kernel headers, DKMS, and build tools are
