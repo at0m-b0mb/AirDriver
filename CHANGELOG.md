@@ -61,14 +61,29 @@ winner, both are left out: they surface as "unknown adapter" and route into
 `airdriver contribute`. A wrong id installs the wrong driver, which is the one failure
 mode this database exists to prevent.
 
+### Fixed — four chipsets were told they could not sniff when they can
+
+Auditing the flags against the kernel turned up the mistake in the *other*
+direction: `rtl8821ce`, `rtl8822ce`, `rtl8723de` (rtw88) and `rtl8188fu`
+(rtl8xxxu) were all flagged `monitor_mode: false`, while every one of their
+siblings on the same driver was flagged true. Both drivers are mac80211 and
+neither clears the monitor iftype the way ath11k does, so those cards *can* be
+put into monitor mode. The RTL8821CE and RTL8822CE in particular are among the
+most common internal laptop cards there are — telling their owners to go buy an
+adapter they may not need is its own kind of dishonesty. Flags corrected, the
+real caveat (no injection) moved into the notes, and a test now asserts that no
+mac80211-driven chipset is marked blind.
+
 ### Tests
 
-- **107 tests** (was 101). `EvidenceBackedCapabilities` pins the flags that came from
+- **108 tests** (was 101). `EvidenceBackedCapabilities` pins the flags that came from
   kernel source — QCA6390/WCN6855 must stay non-sniffing, WCN7850 must stay sniffing,
   FullMAC Broadcom must never claim monitor — so a well-meaning "fix" can't quietly make
   the database optimistic. Also enforced: injection implies monitor, every quality value
   is on the declared scale, and the two ambiguous ids resolve to nothing.
 - Database floors in the suite and the CI GUI job raised to the current 52 families.
+- `test_mac80211_chipsets_are_not_marked_blind` walks every entry whose in-kernel
+  driver sits on mac80211 and asserts it is not flagged monitor-incapable.
 
 ## [0.7.0] — 2026-08-27 · "Ground Truth"
 

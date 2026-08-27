@@ -162,3 +162,26 @@ class EvidenceBackedCapabilities(unittest.TestCase):
         for uid in ("050d:7050", "0707:ee13"):
             with self.subTest(usb_id=uid):
                 self.assertIsNone(self.db.match_usb(uid))
+
+    # Drivers that sit on mac80211 (softmac). mac80211 unconditionally adds
+    # NL80211_IFTYPE_MONITOR in ieee80211_register_hw(), so unless the driver
+    # explicitly clears it again — which only ath11k/ath12k do — these chipsets
+    # can be put into monitor mode. Flagging one of them monitor=false tells a
+    # user to go buy hardware they already own.
+    MAC80211_DRIVERS = {
+        "rtl8xxxu", "rtl8187", "rt2800usb", "rt73usb", "rt2500usb", "ath5k",
+        "ath9k", "ath9k_htc", "carl9170", "zd1211rw", "p54usb", "ar5523",
+        "mt7601u", "mt76x0u", "mt76x2u", "mt7921u", "mt7925u", "mt7921e",
+        "rtlwifi", "iwlwifi", "ath10k_pci",
+    }
+
+    def test_mac80211_chipsets_are_not_marked_blind(self):
+        for c in self.db.all():
+            mod = c.kernel_native.module if c.kernel_native else ""
+            base = mod.split("_")[0] if mod.startswith("rtw8") else mod
+            if mod in self.MAC80211_DRIVERS or base in ("rtw88", "rtw89"):
+                with self.subTest(chipset=c.id, module=mod):
+                    self.assertTrue(
+                        c.monitor_mode,
+                        f"{c.id} uses the mac80211 driver '{mod}', which always advertises "
+                        "monitor mode, so monitor_mode must not be false")
