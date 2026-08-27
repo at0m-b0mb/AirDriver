@@ -15,8 +15,8 @@ jobs:
       matrix:
         python: ["3.9", "3.11", "3.13"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python }}
       - name: Validate the chipset database
@@ -28,8 +28,8 @@ jobs:
     name: GUI import smoke (PySide6, offscreen)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Install Qt runtime system libraries
@@ -59,6 +59,6 @@ jobs:
               app.processEvents()   # let the scan worker finish, then tear down cleanly
           w.grab()
           w.close()
-          assert len(w.db) >= 29, "chipset database shrank unexpectedly"
+          assert len(w.db) >= 40, "chipset database shrank unexpectedly"
           print("GUI OK — families:", len(w.db), "ids:", w.db.usb_id_count())
           PY
