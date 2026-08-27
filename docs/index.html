@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AirDriver — Wi-Fi adapter driver auto-installer for Kali &amp; Parrot</title>
+<meta name="description" content="AirDriver identifies your Wi-Fi adapter and installs a driver that actually works on Kali Linux and Parrot OS. 52 chipset families, 1258 USB/PCI IDs, with honest monitor-mode and injection flags.">
+<meta property="og:title" content="AirDriver — Wi-Fi driver auto-installer for Kali &amp; Parrot">
+<meta property="og:description" content="52 chipset families · 1258 USB/PCI IDs · honest monitor/injection flags.">
+<meta property="og:image" content="https://github.com/at0m-b0mb/AirDriver/raw/main/docs/banner.png">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>📡</text></svg>">
+<style>
+  :root{
+    --bg:#0b0f14; --surface:#131a23; --surface2:#182130; --line:#243044;
+    --text:#e6edf3; --dim:#8b98a5; --faint:#5d6b7a;
+    --green:#2ee6a6; --green-d:#1f9e72; --blue:#38bdf8; --amber:#f5a623; --red:#f2726f;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth;scroll-padding-top:70px}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);
+       line-height:1.65;-webkit-font-smoothing:antialiased}
+  a{color:var(--blue);text-decoration:none}
+  a:hover{text-decoration:underline}
+  code,kbd{font-family:var(--mono);font-size:.9em}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 20px}
+
+  nav{position:sticky;top:0;z-index:50;background:rgba(11,15,20,.86);
+      backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  nav .wrap{display:flex;align-items:center;gap:22px;height:58px}
+  nav .brand{font-weight:700;letter-spacing:-.2px;color:var(--text)}
+  nav .brand span{color:var(--green)}
+  nav .links{display:flex;gap:18px;margin-left:auto;flex-wrap:wrap}
+  nav .links a{color:var(--dim);font-size:.92rem}
+  nav .links a:hover{color:var(--text);text-decoration:none}
+
+  header.hero{padding:56px 0 40px;border-bottom:1px solid var(--line);
+    background:radial-gradient(900px 380px at 12% -10%,rgba(31,158,114,.18),transparent 60%)}
+  .hero img.banner{width:100%;height:auto;border-radius:14px;border:1px solid var(--line);display:block}
+  .tagline{font-size:1.12rem;color:var(--dim);margin:22px 0 6px;max-width:70ch}
+  .badges{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 4px}
+  .badge{font-size:.78rem;padding:4px 11px;border-radius:999px;
+    border:1px solid var(--line);background:var(--surface);color:var(--dim)}
+  .badge.g{color:var(--green);border-color:rgba(46,230,166,.35)}
+  .cta{display:flex;gap:12px;flex-wrap:wrap;margin-top:24px}
+  .btn{display:inline-block;padding:10px 20px;border-radius:9px;font-weight:600;font-size:.95rem}
+  .btn.primary{background:var(--green-d);color:#fff;border:1px solid var(--green-d)}
+  .btn.primary:hover{background:var(--green);color:#04241a;text-decoration:none}
+  .btn.ghost{border:1px solid var(--line);color:var(--text);background:var(--surface)}
+  .btn.ghost:hover{border-color:var(--green-d);text-decoration:none}
+
+  section{padding:56px 0;border-bottom:1px solid var(--line)}
+  h2{font-size:1.6rem;margin:0 0 6px;letter-spacing:-.4px}
+  h3{font-size:1.06rem;margin:26px 0 8px}
+  .sub{color:var(--dim);margin:0 0 26px;max-width:74ch}
+
+  pre{background:var(--surface);border:1px solid var(--line);border-radius:10px;
+      padding:14px 16px;overflow-x:auto;margin:12px 0}
+  pre code{color:var(--text)}
+  .c-comment{color:var(--faint)}
+  .c-cmd{color:var(--green)}
+
+  .grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px 20px}
+  .card h4{margin:0 0 6px;font-size:1rem}
+  .card p{margin:0;color:var(--dim);font-size:.93rem}
+
+  .callout{border-left:3px solid var(--amber);background:rgba(245,166,35,.07);
+    border-radius:0 10px 10px 0;padding:14px 18px;margin:20px 0}
+  .callout.good{border-left-color:var(--green-d);background:rgba(31,158,114,.08)}
+  .callout p{margin:0;color:var(--dim);font-size:.94rem}
+  .callout strong{color:var(--text)}
+
+  /* chipset browser */
+  .controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+  .controls input[type=search]{flex:1 1 300px;background:var(--surface);color:var(--text);
+    border:1px solid var(--line);border-radius:9px;padding:11px 14px;font-size:.95rem;font-family:var(--mono)}
+  .controls input[type=search]:focus{outline:none;border-color:var(--green-d)}
+  .filter{font-size:.83rem;padding:7px 13px;border-radius:999px;cursor:pointer;
+    border:1px solid var(--line);background:var(--surface);color:var(--dim);user-select:none}
+  .filter[aria-pressed=true]{background:var(--green-d);border-color:var(--green-d);color:#fff}
+  .count{color:var(--faint);font-size:.86rem;margin-left:auto;font-family:var(--mono)}
+
+  .tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+  table{border-collapse:collapse;width:100%;font-size:.9rem;min-width:820px}
+  th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:var(--surface2);color:var(--dim);font-weight:600;font-size:.78rem;
+     text-transform:uppercase;letter-spacing:.06em;position:sticky;top:58px;z-index:1}
+  tbody tr:last-child td{border-bottom:none}
+  tbody tr.chip-row{cursor:pointer}
+  tbody tr.chip-row:hover{background:var(--surface2)}
+  .yes{color:var(--green)} .no{color:var(--red)} .maybe{color:var(--amber)}
+  .q{font-size:.76rem;padding:2px 8px;border-radius:999px;border:1px solid var(--line);color:var(--dim)}
+  .q.excellent{color:var(--green);border-color:rgba(46,230,166,.4)}
+  .q.good{color:var(--green);border-color:rgba(46,230,166,.25)}
+  .q.fair{color:var(--amber);border-color:rgba(245,166,35,.3)}
+  .q.poor,.q.unknown{color:var(--faint)}
+  .name{font-weight:600;color:var(--text)}
+  .vendor{color:var(--faint);font-size:.8rem;display:block}
+  .detail td{background:var(--bg);color:var(--dim);font-size:.88rem}
+  .detail .ids{font-family:var(--mono);font-size:.78rem;color:var(--faint);
+    word-break:break-all;margin-top:8px;line-height:1.9}
+  .detail .ids b{color:var(--dim);font-weight:400}
+  .hidden{display:none}
+  .empty{padding:30px;text-align:center;color:var(--faint)}
+
+  .mermaid{background:var(--surface);border:1px solid var(--line);
+    border-radius:12px;padding:18px;overflow-x:auto;text-align:center}
+  footer{padding:36px 0 60px;color:var(--faint);font-size:.88rem}
+  footer a{color:var(--dim)}
+  @media (max-width:640px){
+    header.hero{padding:34px 0 28px} section{padding:40px 0}
+    th{position:static} nav .links a:nth-child(n+4){display:none}
+  }
+</style>
+</head>
+<body>
+
+<nav><div class="wrap">
+  <span class="brand">Air<span>Driver</span></span>
+  <span class="links">
+    <a href="#install">Install</a>
+    <a href="#how">How it works</a>
+    <a href="#chipsets">Chipsets</a>
+    <a href="#honesty">Capability flags</a>
+    <a href="#cli">CLI</a>
+    <a href="#trouble">Troubleshooting</a>
+    <a href="https://github.com/at0m-b0mb/AirDriver">GitHub&nbsp;↗</a>
+  </span>
+</div></nav>
+
+<header class="hero"><div class="wrap">
+  <img class="banner" src="banner.png" alt="AirDriver — Wi-Fi adapter driver auto-installer for Kali Linux and Parrot OS">
+  <p class="tagline">Plug in your adapter. AirDriver identifies the chipset, picks a driver path that
+  can actually succeed on your kernel, installs it, brings the interface up — then tells you
+  honestly whether it worked.</p>
+  <div class="badges">
+    <span class="badge g">v0.8.0 · Wider Net</span>
+    <span class="badge">52 chipset families</span>
+    <span class="badge">1258 USB/PCI IDs</span>
+    <span class="badge">Kali · Parrot · Debian · Ubuntu</span>
+    <span class="badge">Python 3.9+ · stdlib core</span>
+    <span class="badge">MIT</span>
+  </div>
+  <div class="cta">
+    <a class="btn primary" href="#install">Install it</a>
+    <a class="btn ghost" href="#chipsets">Is my adapter supported?</a>
+    <a class="btn ghost" href="https://github.com/at0m-b0mb/AirDriver">Source on GitHub</a>
+  </div>
+</div></header>
+
+<section id="install"><div class="wrap">
+  <h2>Install</h2>
+  <p class="sub">One line on Kali, Parrot, Debian or Ubuntu. The installer pulls the build
+  prerequisites, the Qt runtime libraries the GUI needs, creates an isolated virtualenv and
+  drops an <code>airdriver</code> launcher on your PATH.</p>
+<pre><code><span class="c-comment"># one-liner</span>
+<span class="c-cmd">curl -fsSL https://github.com/at0m-b0mb/AirDriver/raw/main/install.sh | sudo bash</span>
+
+<span class="c-comment"># or from a clone</span>
+<span class="c-cmd">git clone https://github.com/at0m-b0mb/AirDriver.git &amp;&amp; cd AirDriver</span>
+<span class="c-cmd">sudo ./install.sh</span>
+
+<span class="c-comment"># then</span>
+<span class="c-cmd">airdriver</span>              <span class="c-comment"># GUI</span>
+<span class="c-cmd">airdriver scan</span>         <span class="c-comment"># CLI: what's plugged in?</span>
+<span class="c-cmd">sudo airdriver install</span> <span class="c-comment"># plan + install a driver</span></code></pre>
+  <div class="callout good"><p><strong>No internet on the target box?</strong> That's the catch-22
+  AirDriver exists for — no Wi-Fi driver means no connection to download the driver. Run
+  <code>./scripts/fetch_offline_drivers.sh</code> while you still have a connection to bundle the
+  driver sources, then install air-gapped.</p></div>
+</div></section>
+
+<section id="how"><div class="wrap">
+  <h2>How driver selection works</h2>
+  <p class="sub">AirDriver prefers the in-kernel driver whenever your kernel is new enough, because
+  the fastest DKMS build is the one that never runs. Everything after the install matters just as
+  much: a loaded module is not a working adapter until the radio is unblocked and the interface is up.</p>
+  <pre class="mermaid">flowchart TD
+    A([Plug in the adapter]) --&gt; B[&quot;Enumerate USB + PCI&lt;br/&gt;straight from sysfs&quot;]
+    B --&gt; C{&quot;VID:PID in the&lt;br/&gt;chipset database?&quot;}
+    C --&gt;|no| Z[&quot;airdriver contribute —&lt;br/&gt;a pre-filled report,&lt;br/&gt;so the database learns it&quot;]
+    C --&gt;|yes| D{&quot;In-kernel driver,&lt;br/&gt;and a new enough kernel?&quot;}
+
+    D --&gt;|yes| K[&quot;Load it — no build at all&quot;]
+    D --&gt;|no| P{&quot;Best feasible method,&lt;br/&gt;in priority order&quot;}
+
+    P --&gt;|&quot;apt · online + Debian&quot;| APT[&quot;Install the distro&lt;br/&gt;DKMS package&quot;]
+    P --&gt;|&quot;dkms_git · online&quot;| GIT[&quot;Compile the&lt;br/&gt;maintainer&#x27;s driver&quot;]
+    P --&gt;|&quot;offline · bundle present&quot;| OFF[&quot;Compile the&lt;br/&gt;bundled source&quot;]
+    P --&gt;|none feasible| NONE[&quot;Say so plainly —&lt;br/&gt;and why each option failed&quot;]
+    APT -.-&gt;|&quot;missing, or lagging&lt;br/&gt;behind your kernel&quot;| GIT
+
+    K --&gt; X
+    APT --&gt; X
+    GIT --&gt; X
+    OFF --&gt; X
+    X[&quot;Blacklist conflicts · depmod · modprobe&lt;br/&gt;rfkill unblock · ip link up · nmcli radio on&quot;]
+
+    X --&gt; V{&quot;Verify — built?&lt;br/&gt;loaded? interface bound?&quot;}
+    V --&gt;|yes| OK([Working adapter])
+    V --&gt;|no| BAD[&quot;The honest verdict, and the exact fix:&lt;br/&gt;rfkill-blocked · Secure Boot ·&lt;br/&gt;built-but-not-loaded · no interface&quot;]
+
+    classDef good fill:#1f9e72,stroke:#0f5f45,color:#ffffff
+    classDef work fill:#38bdf8,stroke:#0b6a94,color:#04212e
+    classDef warn fill:#f5a623,stroke:#8a5a05,color:#2b1a00
+    class A,K,OK good
+    class B,X,APT,GIT,OFF work
+    class Z,BAD,NONE warn</pre>
+  <div class="grid" style="margin-top:22px">
+    <div class="card"><h4>Skips pointless builds</h4><p>If your kernel already ships a working
+      driver for the chip, AirDriver loads and verifies it instead of compiling anything.</p></div>
+    <div class="card"><h4>Falls back automatically</h4><p>When the distro's DKMS package is missing
+      or lagging your kernel, the same step compiles the maintainer's driver from source instead
+      of just failing.</p></div>
+    <div class="card"><h4>Finishes the job</h4><p><code>rfkill unblock</code>, <code>ip link set
+      up</code>, <code>nmcli radio wifi on</code> — the steps people forget, which is why a
+      "successful" install so often looks dead.</p></div>
+    <div class="card"><h4>Tells the truth after</h4><p>Verification checks built / loaded / bound
+      and reports <em>why</em> not: Secure Boot, rfkill, missing firmware, no interface.</p></div>
+  </div>
+</div></section>
+
+<section id="chipsets"><div class="wrap">
+  <h2>Chipset database</h2>
+  <p class="sub">Every chipset AirDriver recognises, with honest monitor-mode and injection flags —
+  search by chipset, vendor, adapter model, or a raw <code>vid:pid</code>. Click a row for the full
+  ID list and notes. Useful before you buy, not just after.</p>
+  <div class="controls">
+    <input type="search" id="q" placeholder="RTL8812AU · Alfa AWUS036ACH · 0bda:8812 · mediatek" autocomplete="off" spellcheck="false">
+    <button class="filter" id="f-mon" aria-pressed="false">Monitor mode</button>
+    <button class="filter" id="f-inj" aria-pressed="false">Injection</button>
+    <span class="count" id="count"></span>
+  </div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr>
+        <th>Chipset</th><th>Bands</th><th>Monitor</th><th>Injection</th>
+        <th>Quality</th><th>Driver path</th><th>IDs</th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="empty hidden" id="empty">No chipset matches that. If it's your adapter, run
+      <code>airdriver contribute</code> — it builds a pre-filled report so the database learns it.</div>
+  </div>
+</div></section>
+
+<section id="honesty"><div class="wrap">
+  <h2>Where the capability flags come from</h2>
+  <p class="sub">Monitor mode and injection are the whole reason to pick one adapter over another, so
+  those flags are read out of the kernel's own source rather than asserted from reputation.</p>
+  <div class="grid">
+    <div class="card"><h4>mac80211 always adds monitor</h4><p><code>net/mac80211/main.c</code> sets
+      <code>interface_modes |= BIT(NL80211_IFTYPE_MONITOR)</code> under the comment
+      <em>"mac80211 always supports monitor"</em>. Every softmac driver inherits it — which is why
+      legacy USB parts are flagged monitor-capable even where their own driver advertises only
+      station mode.</p></div>
+    <div class="card"><h4>ath11k takes it back, per chip</h4><p><code>supports_monitor</code> is
+      <strong>false</strong> for QCA6390 and WCN6855, and ath11k clears the monitor iftype right
+      after registration. Those are in a huge share of 2021+ laptops.</p></div>
+    <div class="card"><h4>ath12k restores it</h4><p>WCN7850 sets <code>supports_monitor = true</code>,
+      so the Wi-Fi 7 part <em>can</em> sniff where its QCA6390 predecessor cannot. They are separate
+      entries so one flag cannot launder the other.</p></div>
+    <div class="card"><h4>brcmfmac is FullMAC</h4><p>It never goes through mac80211 and only offers
+      monitor when firmware reports the feature — which consumer firmware doesn't. That's Raspberry
+      Pi and MacBook Wi-Fi, flagged accordingly.</p></div>
+  </div>
+  <div class="callout"><p><strong>If your laptop has a QCA6390 or WCN6855, monitor mode is not
+  available at all.</strong> Not flaky — never offered. No <code>airmon-ng</code> invocation changes
+  it, because the driver removes the capability before you ever get there. Use an external adapter
+  from the attack-grade list above.</p></div>
+  <div class="callout"><p><strong>Injection is only claimed where there's a track record.</strong>
+  ath11k, ath12k and AR5523 are flagged <em>unknown</em> rather than <em>yes</em>, and
+  <code>airdriver recommend</code> won't put them forward for attack work. Promising injection the
+  tool can't stand behind is worse than admitting the gap.</p></div>
+</div></section>
+
+<section id="cli"><div class="wrap">
+  <h2>Command line</h2>
+  <p class="sub">The core and CLI are pure standard library, so everything works over SSH on a
+  headless box with nothing installed.</p>
+<pre><code><span class="c-cmd">airdriver scan</span>              <span class="c-comment"># detected adapters + chipset match</span>
+<span class="c-cmd">airdriver doctor</span>            <span class="c-comment"># headers, DKMS, Secure Boot, build tools</span>
+<span class="c-cmd">airdriver info 0bda:8812</span>    <span class="c-comment"># everything known about a chipset</span>
+<span class="c-cmd">airdriver install --dry-run</span> <span class="c-comment"># preview the exact plan, change nothing</span>
+<span class="c-cmd">airdriver verify</span>            <span class="c-comment"># is it really installed, loaded and bound?</span>
+<span class="c-cmd">airdriver diagnose</span>          <span class="c-comment"># one shareable block for a help thread</span>
+
+<span class="c-comment"># the lifecycle around an install</span>
+<span class="c-cmd">airdriver status</span>            <span class="c-comment"># what's installed, built for this kernel?</span>
+<span class="c-cmd">sudo airdriver rebuild</span>      <span class="c-comment"># after a kernel upgrade broke Wi-Fi</span>
+<span class="c-cmd">sudo airdriver sign</span>         <span class="c-comment"># sign modules so Secure Boot loads them</span>
+<span class="c-cmd">sudo airdriver modeswitch</span>   <span class="c-comment"># kick a "driver CD-ROM" dongle into Wi-Fi mode</span>
+<span class="c-cmd">airdriver recommend</span>         <span class="c-comment"># which adapter should I actually buy?</span>
+<span class="c-cmd">airdriver contribute</span>        <span class="c-comment"># report an unknown adapter</span></code></pre>
+</div></section>
+
+<section id="trouble"><div class="wrap">
+  <h2>Troubleshooting</h2>
+  <div class="grid">
+    <div class="card"><h4>Wi-Fi broke after an update</h4><p>A new kernel means your out-of-tree
+      module was never built for it. <code>sudo airdriver rebuild</code>. This is the single most
+      common Kali Wi-Fi failure.</p></div>
+    <div class="card"><h4>"Installed" but the adapter is dead</h4><p>Usually rfkill or Secure Boot.
+      <code>airdriver verify</code> names which, with the fix. Then
+      <code>sudo airdriver diagnose</code> if you need to ask someone.</p></div>
+    <div class="card"><h4>Secure Boot refuses the module</h4><p>A fresh DKMS module is unsigned.
+      <code>sudo airdriver sign</code> generates a key and signs it; enrolling is one manual
+      <code>mokutil</code> step plus a reboot, printed for you.</p></div>
+    <div class="card"><h4>Dongle shows up as a CD-ROM</h4><p>Many cheap adapters enumerate as fake
+      storage holding Windows drivers. <code>sudo airdriver modeswitch</code> ejects it so it
+      re-appears as Wi-Fi — under a <em>different</em> USB id.</p></div>
+    <div class="card"><h4>Adapter not recognised</h4><p><code>airdriver contribute</code> assembles
+      the descriptors, kernel and dmesg into a pre-filled issue. It never sends anything on its own,
+      and never collects your serial number.</p></div>
+    <div class="card"><h4>Nothing detected at all</h4><p>Detection reads sysfs directly, so an empty
+      list really means the kernel sees no wireless hardware. Try another port — high-power cards
+      want USB 3.0 or a powered hub.</p></div>
+  </div>
+</div></section>
+
+<footer><div class="wrap">
+  AirDriver v0.8.0 “Wider Net” · MIT · built by
+  <a href="https://github.com/at0m-b0mb">at0m-b0mb</a> ·
+  <a href="https://github.com/at0m-b0mb/AirDriver">source</a> ·
+  <a href="https://github.com/at0m-b0mb/AirDriver/blob/main/CHANGELOG.md">changelog</a> ·
+  <a href="https://github.com/at0m-b0mb/AirDriver/issues/new?labels=new-adapter">report an adapter</a>
+  <br><br>
+  Database: 52 chipset families, 1258 USB/PCI IDs — every one taken from a kernel
+  driver's own device table. This page is generated from
+  <a href="https://github.com/at0m-b0mb/AirDriver/blob/main/airdriver/data/chipsets.json">chipsets.json</a>, so it cannot drift
+  from what the tool actually knows.
+</div></footer>
+
+<script>
+const DATA = [{"id":"rtl8187","name":"Realtek RTL8187","vendor":"Realtek","wifi":"WiFi 4 (802.11g)","band":"Single-band 2.4 GHz","monitor":true,"injection":true,"quality":"excellent","notes":"The legendary original ALFA AWUS036H. Ancient but rock-solid injection. Fully in-kernel (rtl8187) — AirDriver just confirms the module loads, no build needed.","adapters":["ALFA AWUS036H"],"ids":["03f0:ca02","050d:705e","0769:11f2","0789:010c","0846:4260","0846:6100","0846:6a00","0b05:171d","0bda:8187","0bda:8189","0bda:8197","0bda:8198","0df6:000d","0df6:0028","0df6:0029","114b:0150","1371:9401","13d1:abe6","1737:0073","18e8:6232","1b75:8187"],"native":"rtl8187","path":"in-kernel"},{"id":"ar9271","name":"Atheros AR9271","vendor":"Qualcomm Atheros","wifi":"WiFi 4 (802.11n)","band":"Single-band 2.4 GHz","monitor":true,"injection":true,"quality":"excellent","notes":"Gold-standard 2.4 GHz pentest chip (ALFA AWUS036NHA, TL-WN722N v1). Fully in-kernel via ath9k_htc but needs the linux-firmware 'htc_9271' blob. AirDriver verifies the firmware is present.","adapters":["ALFA AWUS036NHA","TP-Link TL-WN722N v1","Panda PAU05"],"ids":["040d:3801","0471:209e","04ca:4605","057c:8403","07b8:9271","07d1:3a10","0846:9030","0cf3:1006","0cf3:20ff","0cf3:7015","0cf3:9271","0cf3:b002","0cf3:b003","13d3:3327","13d3:3328","13d3:3346","13d3:3348","13d3:3349","13d3:3350","1eda:2315"],"native":"ath9k_htc","path":"in-kernel"},{"id":"mt7612u","name":"MediaTek MT7612U","vendor":"MediaTek","wifi":"WiFi 5 (802.11ac)","band":"Dual-band AC1200 (2.4 + 5 GHz)","monitor":true,"injection":true,"quality":"excellent","notes":"Top pick for modern pentest work: excellent in-kernel mt76x2u driver, very stable monitor mode, high injection success. No DKMS needed.","adapters":["ALFA AWUS036ACM","Panda PAU0D","Netgear A6150"],"ids":["045e:02e6","045e:02fe","0471:2126","0471:7600","056e:400a","057c:8503","0846:9014","0846:9053","0b05:17eb","0b05:180b","0b05:1833","0e8d:7612","0e8d:7632","0e8d:7662","2357:0137","2c4e:0103"],"native":"mt76x2u","path":"in-kernel"},{"id":"ath9k_pci","name":"Atheros AR9xxx (internal PCIe, ath9k)","vendor":"Qualcomm Atheros","wifi":"WiFi 4 (802.11n)","band":"Dual-band N (2.4 + 5 GHz, model dependent)","monitor":true,"injection":true,"quality":"excellent","notes":"The gold standard for internal cards: ath9k is in-kernel, needs no firmware blob, and has the most reliable monitor mode and injection of any chipset here. If your laptop has one of these, you already own the best adapter in the room. Covers AR5416/AR9160/AR9280/AR9285/AR9287/AR9380/AR9485/AR9462/AR9565.","adapters":["Dell DW1520","Lenovo ThinkPad AR9285","Compex WLE200NX","AzureWave AR9280","HP AR9485"],"ids":["168c:0023","168c:0024","168c:0027","168c:0029","168c:002a","168c:002b","168c:002c","168c:002d","168c:002e","168c:0030","168c:0032","168c:0033","168c:0034","168c:0036","168c:0037"],"native":"ath9k","path":"in-kernel"},{"id":"rtl8812au","name":"Realtek RTL8812AU","vendor":"Realtek","wifi":"WiFi 5 (802.11ac)","band":"Dual-band AC1200 (2.4 + 5 GHz)","monitor":true,"injection":true,"quality":"good","notes":"The classic ALFA AWUS036ACH chipset. Monitor mode can get unstable after long sessions on some firmware revisions; morrownr driver is more stable than the kernel rtw88 path for injection work.","adapters":["ALFA AWUS036ACH","ALFA AWUS036AC","TP-Link Archer T4U v1","Netgear A6210","D-Link DWA-172","EnGenius EUB1200AC"],"ids":["0409:0408","0411:025d","04bb:0952","050d:1106","050d:1109","0586:3426","0789:016e","07b8:8812","0846:9051","0b05:17d2","0bda:8812","0bda:881a","0bda:881b","0bda:881c","0df6:0074","0e66:0022","1058:0632","13b1:003f","148f:9097","1740:0100","2001:330e","2001:3313","2001:3315","2001:3316","2019:ab30","20f4:805b","2357:0101","2357:0103","2357:010d","2357:010e","2357:010f","2357:0122","2604:0012","7392:a822"],"native":"rtw88_8812au","path":"apt → DKMS → offline"},{"id":"rtl8814au","name":"Realtek RTL8814AU","vendor":"Realtek","wifi":"WiFi 5 (802.11ac)","band":"Dual-band AC1900 (2.4 + 5 GHz), 4x4","monitor":true,"injection":true,"quality":"good","notes":"High-power 4-antenna beast (ALFA AWUS1900). Draws a lot of current — use a powered hub on SBCs. In-kernel rtw88 support landed 6.15 / optimized 6.16.","adapters":["ALFA AWUS1900","ALFA AWUS036ACA"],"ids":["056e:400b","056e:400d","0846:9054","0b05:1817","0b05:1852","0b05:1853","0bda:8813","0e66:0026","2001:331a","20f4:809a","20f4:809b","2357:0106","7392:a833","7392:a834"],"native":"rtw88_8814au","path":"apt → DKMS → offline"},{"id":"ar7010","name":"Atheros AR7010","vendor":"Qualcomm Atheros","wifi":"WiFi 4 (802.11n)","band":"Dual-band 2.4 + 5 GHz","monitor":true,"injection":true,"quality":"good","notes":"Dual-band Atheros sibling of the AR9271. In-kernel ath9k_htc, needs the htc_7010 firmware blob.","adapters":["ALFA AWUS051NH v2","Netgear WNDA3200"],"ids":["0411:017f","0411:0197","04da:3904","083a:a704","0846:9018","0930:0a08","0cf3:7010"],"native":"ath9k_htc","path":"in-kernel"},{"id":"rt2870_rt3070","name":"Ralink RT3070 / RT2870","vendor":"Ralink / MediaTek","wifi":"WiFi 4 (802.11n)","band":"Single-band 2.4 GHz","monitor":true,"injection":true,"quality":"good","notes":"Old reliable. Fully in-kernel via rt2800usb. Common in many cheap-but-capable dongles.","adapters":["ALFA AWUS036NH","Panda PAU06"],"ids":["07b8:3070","083a:7512","0bda:8070","148f:2770","148f:2870","148f:3070","148f:3071","148f:3072","1737:0077"],"native":"rt2800usb","path":"in-kernel"},{"id":"rt5370","name":"Ralink RT5370 / RT5372","vendor":"Ralink / MediaTek","wifi":"WiFi 4 (802.11n)","band":"Single-band 2.4 GHz","monitor":true,"injection":true,"quality":"good","notes":"Tiny low-power 2.4 GHz chip, popular for Raspberry Pi rigs. In-kernel rt2800usb. (The dual-band RT5572 lives in its own entry.)","adapters":["Panda PAU06","Generic RT5370 nano"],"ids":["148f:5370","148f:5372"],"native":"rt2800usb","path":"in-kernel"},{"id":"mt7610u","name":"MediaTek MT7610U","vendor":"MediaTek","wifi":"WiFi 5 (802.11ac)","band":"Dual-band AC600 (2.4 + 5 GHz)","monitor":true,"injection":true,"quality":"good","notes":"Solid in-kernel mt76x0u driver since 4.19. ALFA AWUS036ACHM. No DKMS needed on modern kernels.","adapters":["ALFA AWUS036ACHM","Panda PAU0B"],"ids":["04bb:0951","057c:8502","0586:3425","07b8:7610","0b05:17d1","0b05:17db","0df6:0075","0df6:0079","0e8d:7610","0e8d:7630","0e8d:7650","13b1:003e","148f:760a","148f:7610","148f:761a","2001:3d02","2019:ab31","20f4:806b","2357:0105","2357:010b","2357:0123","293c:5702","7392:a711","7392:b711","7392:c711"],"native":"mt76x0u","path":"in-kernel"},{"id":"mt7921au","name":"MediaTek MT7921AU","vendor":"MediaTek","wifi":"WiFi 6E (802.11ax)","band":"Tri-band AX (2.4 + 5 + 6 GHz)","monitor":true,"injection":true,"quality":"good","notes":"Modern WiFi 6E chip with active-monitor support. In-kernel mt7921u since 5.18. ALFA AWUS036AXML, Brostrend AX9L.","adapters":["ALFA AWUS036AXML","Brostrend AX9L","Netgear A8000","Panda PAU0F"],"ids":["0846:9060","0846:9065","0e8d:7902","0e8d:7961","3574:6211","35bc:0107","3625:010b"],"native":"mt7921u","path":"in-kernel"},{"id":"mt7925u","name":"MediaTek MT7925U","vendor":"MediaTek","wifi":"WiFi 7 (802.11be)","band":"Tri-band BE (2.4 + 5 + 6 GHz)","monitor":true,"injection":true,"quality":"good","notes":"Bleeding-edge WiFi 7. In-kernel mt7925u since 6.7 — needs a recent kernel. Active monitor supported.","adapters":["Netgear A9000","Netgear A8500"],"ids":["0846:9050","0846:9072","0e8d:6639","0e8d:7925"],"native":"mt7925u","path":"in-kernel"},{"id":"rt3572_rt5572","name":"Ralink RT3572 / RT5572 (dual-band)","vendor":"Ralink / MediaTek","wifi":"WiFi 4 (802.11n)","band":"Dual-band 2.4 + 5 GHz","monitor":true,"injection":true,"quality":"good","notes":"Reliable old-school dual-band N chips, fully in-kernel via rt2800usb. The RT5572 powers the Panda PAU09 (N600) and ALFA AWUS052NH; the RT3572 powers the ALFA AWUS051NH v1. No build needed.","adapters":["ALFA AWUS051NH v1","ALFA AWUS052NH","Panda PAU09 (N600)","D-Link DWA-160 B2"],"ids":["043e:7a32","0586:3416","0789:0168","07d1:3c1a","083a:c522","0df6:0048","148f:3572","148f:5572","1737:0078","1740:9603"],"native":"rt2800usb","path":"in-kernel"},{"id":"rt2800usb_other","name":"Ralink/MediaTek RT2800-series (other adapters)","vendor":"Ralink / MediaTek","wifi":"WiFi 4 (802.11n)","band":"2.4 GHz (some models dual-band)","monitor":true,"injection":true,"quality":"good","notes":"Catch-all for the several hundred rebadged adapters the in-kernel rt2800usb driver supports (RT2770/RT2870/RT3070/RT3071/RT3072/RT35xx/RT53xx/RT55xx silicon under many brand names). No build needed — the driver ships with the kernel, and monitor mode plus injection generally work well. Exact capability varies with the specific chip and its EEPROM/firmware; the popular RT3070, RT5370 and RT3572/RT5572 adapters have their own, better-characterised entries above. IDs come straight from the kernel's rt2800usb device table.","adapters":["Many rebadged RT2800-series USB adapters"],"ids":["0411:00e8","0411:012e","0411:0148","0411:0150","0411:0158","0411:015d","0411:016f","0411:01a2","0411:01a8","0411:01ee","0411:01fd","0411:0241","0411:0253","043e:7a12","043e:7a13","043e:7a22","043e:7a42","0471:200f","0471:20dd","0471:2104","0471:2180","0471:2181","0471:2182","04bb:0944","04bb:0945","04bb:0947","04bb:0948","04bb:094b","04bb:094e","04da:1800","04da:1801","04da:23f6","04e8:2018","050d:1003","050d:1103","050d:8053","050d:805c","050d:815c","050d:825a","050d:825b","050d:935a","050d:935b","050d:945b","057c:8501","0586:3418","0586:341a","0586:341e","0586:3421","0586:343e","05a6:0101","06f8:e036","0789:0162","0789:0163","0789:0164","0789:0166","0789:0169","0789:016b","0789:0170","07aa:002f","07aa:003c","07aa:003f","07aa:0041","07aa:0042","07b8:2770","07b8:2870","07b8:3071","07b8:3072","07b8:3073","07b8:3074","07d1:3c09","07d1:3c0a","07d1:3c0b","07d1:3c0d","07d1:3c0e","07d1:3c0f","07d1:3c11","07d1:3c13","07d1:3c15","07d1:3c16","07d1:3c17","07fa:7712","083a:6618","083a:7511","083a:7522","083a:8522","083a:a512","083a:a618","083a:a701","083a:a702","083a:a703","083a:b511","083a:b512","083a:b522","083a:d522","083a:f511","0846:9012","0846:9013","0846:9019","08b9:1197","0930:0a07","0b05:166a","0b05:1731","0b05:1732","0b05:1742","0b05:1760","0b05:1761","0b05:1784","0b05:1790","0b05:179d","0b05:17a7","0b05:17ad","0b05:17bc","0b05:17e8","0cde:0022","0cde:0025","0db0:3820","0db0:3821","0db0:3822","0db0:3870","0db0:3871","0db0:6899","0db0:821a","0db0:822a","0db0:822b","0db0:822c","0db0:870a","0db0:871a","0db0:871b","0db0:871c","0db0:899a","0df6:0017","0df6:002b","0df6:002c","0df6:002d","0df6:0039","0df6:003b","0df6:003c","0df6:003d","0df6:003e","0df6:003f","0df6:0040","0df6:0041","0df6:0042","0df6:0047","0df6:004a","0df6:004d","0df6:0050","0df6:0051","0df6:0053","0df6:005f","0df6:0060","0df6:0062","0df6:0065","0df6:0066","0df6:0067","0df6:0068","0df6:0069","0df6:006a","0df6:006e","0df6:006f","0df6:0078","0e0b:9031","0e0b:9041","0e66:0001","0e66:0003","0e66:0009","0e66:000b","0e66:0013","0e66:0017","0e66:0018","0e66:0021","0fe9:b307","100d:9031","100d:9032","1044:800b","1044:800c","1044:800d","129b:1828","13b1:002f","13b1:0031","13b1:003b","13d3:3247","13d3:3262","13d3:3273","13d3:3284","13d3:3305","13d3:3307","13d3:3321","13d3:3322","13d3:3329","13d3:3340","13d3:3365","13d3:3399","13d3:3400","13d3:3401","1482:3c09","148f:2070","148f:3370","148f:3573","148f:8070","148f:f101","148f:f301","14b2:3c06","14b2:3c07","14b2:3c08","14b2:3c09","14b2:3c11","14b2:3c12","14b2:3c23","14b2:3c25","14b2:3c27","14b2:3c28","14b2:3c2c","157e:300e","157e:3013","15a9:0006","15a9:0010","15a9:0012","15c5:0008","167b:4001","1690:0740","1690:0744","1690:0761","1690:0764","1737:0070","1737:0071","1737:0079","1740:0600","1740:0602","1740:0615","1740:9701","1740:9702","1740:9703","1740:9705","1740:9706","1740:9707","1740:9708","1740:9709","1740:9801","1761:0b05","177f:0153","177f:0163","177f:0164","177f:0165","177f:0254","177f:0302","177f:0313","177f:0323","177f:0324","177f:1163","18c5:0008","18c5:0012","18e8:6259","1a32:0304","1b75:3070","1b75:3071","1b75:3072","1b75:7733","1b75:a200","1d4d:0002","1d4d:000c","1d4d:000e","1d4d:0010","1d4d:0011","1eda:2012","1eda:2210","1eda:2310","2001:3317","2001:3c15","2001:3c17","2001:3c19","2001:3c1a","2001:3c1b","2001:3c1c","2001:3c1d","2001:3c1e","2001:3c1f","2001:3c20","2001:3c21","2001:3c22","2001:3c23","2001:3c25","2019:5201","2019:ab24","2019:ab25","2019:ab29","2019:ed06","2019:ed14","2019:ed19","203d:1480","203d:14a1","203d:14a9","20b8:8888","20f4:724a","5a57:0280","5a57:0282","5a57:0283","5a57:0284","5a57:5257","7392:4085","7392:7711","7392:7717","7392:7718","7392:7722","7392:7733","8516:2070","8516:2770","8516:2870","8516:3070","8516:3071","8516:3072","8516:3572","f201:5370"],"native":"rt2800usb","path":"in-kernel"},{"id":"ath5k_pci","name":"Atheros AR5xxx (legacy PCI/PCIe, ath5k)","vendor":"Atheros","wifi":"WiFi 4 (802.11a/b/g)","band":"Dual-band a/b/g (2.4 + 5 GHz, model dependent)","monitor":true,"injection":true,"quality":"good","notes":"The pre-ath9k Atheros generation, and still an excellent sniffer: ath5k is in-kernel, needs no firmware blob, and inherits mac80211's monitor support. Slow by modern standards (802.11a/b/g only) but rock-solid for capture, and the cards cost almost nothing second-hand. Covers AR5210/5211/5212/5213/2413/5413/2417.","adapters":["Atheros AR5212 miniPCI","3Com 3CRDAG675","IBM miniPCI AR5212","Ubiquiti SR2/SR5"],"ids":["10b7:0013","168c:0007","168c:0011","168c:0012","168c:0013","168c:0014","168c:0015","168c:0016","168c:0017","168c:0018","168c:0019","168c:001a","168c:001b","168c:001c","168c:001d","168c:0207","168c:1014","168c:ff16","168c:ff1a","168c:ff1b","a727:0013"],"native":"ath5k","path":"in-kernel"},{"id":"rt73usb","name":"Ralink RT2501USB / RT73","vendor":"Ralink","wifi":"WiFi 4 (802.11b/g)","band":"Single-band 2.4 GHz","monitor":true,"injection":true,"quality":"good","notes":"The classic mid-2000s Ralink USB part and one of the original reliable injection chipsets — rt73usb is in-kernel rt2x00, so monitor mode and injection both work. 802.11g only, so it is slow, but it still does the job and turns up cheap. Rebadged by nearly every vendor of the era.","adapters":["ASUS","Belkin","Buffalo","D-Link","Conceptronic","Linksys","AboCom"],"ids":["0411:00d8","0411:00d9","0411:00e6","0411:00f4","0411:0116","0411:0119","0411:0137","0471:200a","04bb:093d","04e8:4471","050d:705a","050d:905b","050d:905c","0586:3415","06f8:e002","06f8:e010","06f8:e020","0769:31f3","07aa:002e","07b8:b21b","07b8:b21c","07b8:b21d","07b8:b21e","07b8:b21f","07d1:3c03","07d1:3c04","07d1:3c06","07d1:3c07","0812:3101","08dd:0120","0b05:1723","0b05:1724","0cde:001c","0db0:4600","0db0:6874","0db0:6877","0db0:a861","0db0:a874","0df6:0024","0df6:0027","0df6:002f","0df6:90ac","0df6:9712","0eb0:9021","1044:8008","1044:800a","1371:9022","1371:9032","13b1:0020","13b1:0023","13b1:0028","1472:0009","148f:2573","148f:2671","148f:9021","14b2:3c10","14b2:3c22","15a9:0004","1631:c019","1690:0722","1740:3701","1740:7100","178d:02be","18c5:0002","18e8:6196","18e8:6229","18e8:6238","1b75:7318","2019:ab01","2019:ab50","6933:5001","7167:3840","7392:7318","7392:7618"],"native":"rt73usb","path":"in-kernel"},{"id":"rtl8821au","name":"Realtek RTL8811AU / RTL8821AU","vendor":"Realtek","wifi":"WiFi 5 (802.11ac)","band":"Dual-band AC600 (2.4 + 5 GHz)","monitor":true,"injection":true,"quality":"fair","notes":"Smaller/cheaper AC600 sibling of the 8812au. Good for travel; lower TX power. 8811AU has no active-monitor VIF on the in-kernel path.","adapters":["ALFA AWUS036ACS","TP-Link Archer T2U v1","Edimax EW-7811UTC","Netgear A6100","D-Link DWA-171"],"ids":["0411:0242","0411:029b","04bb:0953","056e:4007","056e:400e","056e:400f","0846:9052","0bda:0811","0bda:0820","0bda:0821","0bda:0823","0bda:8822","0bda:a811","0e66:0023","2001:3314","2001:3318","2019:ab32","20f4:804b","2357:011e","2357:011f","2357:0120","3823:6249","7392:a811","7392:a812","7392:a813","7392:b611"],"native":"rtw88_8821au","path":"apt → DKMS → offline"},{"id":"rtl8821cu","name":"Realtek RTL8811CU / RTL8821CU","vendor":"Realtek","wifi":"WiFi 5 (802.11ac)","band":"Dual-band AC600/AC650 (2.4 + 5 GHz)","monitor":true,"injection":true,"quality":"fair","notes":"Common in tiny nano adapters (TP-Link Archer T2U Nano/Plus). No mainline in-kernel driver yet — DKMS required.","adapters":["TP-Link Archer T2U Nano","TP-Link Archer T2U Plus","ALFA AWUS036ACU","D-Link DWA-171 rev B","Edimax EW-7811UAC"],"ids":["0bda:2006","0bda:8731","0bda:8811","0bda:b820","0bda:b82b","0bda:c80c","0bda:c811","0bda:c820","0bda:c821","0bda:c82a","0bda:c82b","0bda:c830","2001:331d","7392:c811","7392:d811"],"native":"","path":"apt → DKMS → offline"},{"id":"rtl8188eus","name":"Realtek RTL8188EUS / RTL8188EU","vendor":"Realtek","wifi":"WiFi 4 (802.11n)","band":"Single-band 2.4 GHz","monitor":true,"injection":true,"quality":"fair","notes":"This is the chip inside TP-Link TL-WN722N v2/v3 (the v1 is AR9271 — a very common mix-up!). The in-kernel r8188eu lacks reliable monitor mode; use the aircrack/morrownr DKMS driver and blacklist the in-tree module.","adapters":["TP-Link TL-WN722N v2/v3","ALFA AWUS036NEH"],"ids":["056e:4008","07b8:8179","0b05:18f0","0bda:0179","0bda:8179","0bda:ffef","0df6:0076","2001:330f","2001:3310","2001:3311","2001:331b","2357:010c","2357:0111","2c4e:0102","7392:b811"],"native":"","path":"apt → DKMS → offline"},{"id":"rtl8192eu","name":"Realtek RTL8192EU","vendor":"Realtek","wifi":"WiFi 4 (802.11n)","band":"Single-band 2.4 GHz, 2x2","monitor":true,"injection":true,"quality":"fair","notes":"Decent 2.4 GHz-only option. The in-kernel rtl8xxxu works for connectivity but the DKMS driver is more reliable for injection.","adapters":["TP-Link TL-WN822N v4/v5","Edimax EW-7612U"],"ids":["0bda:818b","0bda:818c","2001:3312","2001:3319","2019:ab33","2357:0107","2357:0108","2357:0109","2357:0126","2c4e:0100","2c4e:0104"],"native":"rtl8xxxu","path":"apt → DKMS → offline"},{"id":"rtl8852bu","name":"Realtek RTL8852BU / RTL8832BU","vendor":"Realtek","wifi":"WiFi 6 (802.11ax)","band":"Dual-band AX1800 (2.4 + 5 GHz)","monitor":true,"injection":true,"quality":"fair","notes":"Newer Realtek WiFi 6 USB chip. Mainline rtw89 support landed in kernel 6.17 (rtw89_8852bu); on older kernels use the morrownr DKMS driver. Monitor/injection maturing.","adapters":["ALFA AWUS036AXM","Generic AX1800 USB"],"ids":["0586:3428","0b05:1a62","0b05:1cb6","0bda:a85b","0bda:b832","0bda:b83a","0bda:b83b","0bda:b852","0bda:b85a","0db0:6931","0db0:f0c8","2001:3327","3574:6121","35bc:0100","35bc:0108","7392:6822"],"native":"rtw89_8852bu","path":"DKMS → offline"},{"id":"rtl8852cu","name":"Realtek RTL8852CU / RTL8832CU","vendor":"Realtek","wifi":"WiFi 6E (802.11ax)","band":"Tri-band AXE (2.4 + 5 + 6 GHz)","monitor":true,"injection":true,"quality":"fair","notes":"Realtek WiFi 6E USB. Mainline rtw89 support landed in kernel 6.19 (rtw89_8852cu); on older kernels use the morrownr DKMS driver.","adapters":["Generic AXE USB"],"ids":["0bda:c832","0bda:c85c"],"native":"rtw89_8852cu","path":"DKMS → offline"},{"id":"rtl8822bu","name":"Realtek RTL8822BU / RTL8812BU","vendor":"Realtek","wifi":"WiFi 5 (802.11ac)","band":"Dual-band AC1200 (2.4 + 5 GHz)","monitor":true,"injection":true,"quality":"fair","notes":"Common in mid-range AC1200 dongles (TP-Link Archer T3U/T4U v3). The morrownr 88x2bu driver gives the most reliable monitor/injection; the Kali apt package is the easiest path.","adapters":["TP-Link Archer T3U","TP-Link Archer T4U v3","Comfast CF-812AC","ASUS USB-AC53 Nano","D-Link DWA-182 D1","Linksys WUSB3600 v2","Netgear A6150","TRENDnet TEW-808UBM","Mercusys MA30H"],"ids":["0411:03d0","0411:03d1","04ca:8602","056e:4011","0846:9055","0b05:1841","0b05:184c","0b05:1870","0b05:1874","0b05:19aa","0bda:2102","0bda:b812","0bda:b81a","0bda:b82c","0e66:0025","13b1:0043","13b1:0045","2001:331c","2001:331e","2001:331f","2001:3322","20f4:805a","20f4:808a","2357:0115","2357:0116","2357:0117","2357:0125","2357:012d","2357:012e","2357:0138","2c4e:0107","2c4e:010a","7392:b822","7392:c822","7392:d822","7392:e822","7392:f822"],"native":"","path":"apt → DKMS → offline"},{"id":"mt79xx_pci","name":"MediaTek MT7921E / MT7922 / MT7925E (internal PCIe)","vendor":"MediaTek","wifi":"WiFi 6E / 7 (802.11ax / be)","band":"Tri-band (2.4 + 5 + 6 GHz)","monitor":true,"injection":true,"quality":"fair","notes":"MediaTek's internal counterpart to the MT7921AU dongles, common in AMD laptops. Unusually for an internal card, the mt76 driver supports active monitor mode and some injection — easily the best built-in option after ath9k. In-kernel from 5.15 (MT7921E) / 6.7 (MT7925E).","adapters":["MediaTek MT7921E","MediaTek MT7922 (RZ616)","MediaTek MT7925E (RZ717)"],"ids":["14c3:0608","14c3:0616","14c3:7961","14c3:0717"],"native":"mt7921e","path":"in-kernel"},{"id":"zd1211rw","name":"ZyDAS ZD1211 / ZD1211B","vendor":"ZyDAS / Atheros","wifi":"WiFi 4 (802.11b/g)","band":"Single-band 2.4 GHz","monitor":true,"injection":true,"quality":"fair","notes":"An early-2000s USB chipset rebadged by dozens of vendors. In-kernel zd1211rw is a mac80211 driver, so monitor mode is available and injection works, but the radio is 802.11g only and slow. Worth keeping in a drawer, not worth buying new. Needs the zd1211 firmware from linux-firmware.","adapters":["ZyXEL ZyAIR G-220","3Com 3CRUSB10075","Sitecom WL-113","Trendnet TEW-424UB"],"ids":["0053:5301","0105:145f","0409:0248","0411:00da","0471:1236","0471:1237","050d:705c","054c:0257","0586:3401","0586:3402","0586:3407","0586:3409","0586:340a","0586:340f","0586:3410","0586:3412","0586:3413","079b:004a","079b:0062","07b8:6001","07fa:1196","083a:4505","083a:e501","083a:e503","083a:e506","0ace:1211","0ace:1215","0ace:2011","0ace:20ff","0ace:a211","0ace:b215","0b05:170c","0b05:171b","0b3b:1630","0b3b:5630","0baf:0121","0cde:001a","0df6:0036","0df6:9071","0df6:9075","126f:a006","129b:1666","129b:1667","13b1:001e","13b1:0024","1435:0711","14ea:ab10","14ea:ab13","157e:300a","157e:300b","157e:300d","157e:3204","157e:3207","1582:6003","1740:2000","2019:5303","2019:ed01","6891:a727"],"native":"zd1211rw","path":"in-kernel"},{"id":"rt2500usb","name":"Ralink RT2500USB (RT2570)","vendor":"Ralink","wifi":"WiFi 4 (802.11b/g)","band":"Single-band 2.4 GHz","monitor":true,"injection":true,"quality":"fair","notes":"The generation before rt73usb. In-kernel rt2x00, so monitor mode and injection are available, but it is 802.11b/g, single-band and genuinely old — expect lower rates and less stability than rt73usb. Listed so an ancient dongle is recognised rather than reported as unknown hardware.","adapters":["ASUS","Belkin","Cisco Systems","D-Link","Gigabyte","MSI","SMC","Sagem"],"ids":["0411:005e","0411:0066","0411:0067","0411:008b","0411:0097","050d:7051","0681:3c06","06f8:e000","0769:11f3","079b:004b","0b05:1706","0b05:1707","0db0:6861","0db0:6865","0db0:6869","0eb0:9020","0f88:3012","1044:8001","1044:8007","114b:0110","13b1:000d","13b1:0011","13b1:001a","148f:1706","148f:2570","148f:9020","14b2:3c02","2001:3c00","5a57:0260"],"native":"rt2500usb","path":"in-kernel"},{"id":"p54usb","name":"Intersil/Conexant Prism54 USB (p54usb)","vendor":"Intersil / Conexant","wifi":"WiFi 4 (802.11b/g)","band":"Single-band 2.4 GHz","monitor":true,"injection":true,"quality":"fair","notes":"The USB half of the Prism54 family. In-kernel p54usb is mac80211, so monitor mode is available and injection works, though the hardware is 802.11g-era and the firmware is fussy. Needs isl38xx firmware. Included mostly so these very common old dongles identify correctly instead of reading as unknown.","adapters":["3COM 3CRWE254G72","Belkin F5D7050 ver 1000","D-Link DWL-G122","Corega CG-WLUSB2GT","Dell WLA3310","Netgear WG111 v2"],"ids":["0411:0050","045e:00c2","0471:1230","0506:0a11","0572:2000","0572:2002","0675:0530","06a9:000e","06b9:0120","06b9:0121","0707:ee06","07aa:001c","07aa:0020","0803:4310","083a:4501","083a:4502","083a:4521","083a:4531","083a:5501","083a:c501","083a:f503","0846:4200","0846:4210","0846:4220","0846:4240","0915:2000","0915:2002","09aa:1000","0baf:0118","0bf8:1007","0bf8:1009","0cde:0006","0cde:0008","0cde:0015","0d8e:3762","0db0:6826","107b:55f2","124a:4023","124a:4025","124a:4026","1260:ee22","13b1:000a","13b1:000c","1413:5400","1435:0210","1435:0427","15a9:0002","1630:0005","1668:1050","1740:1000","182d:096b","1915:2234","1915:2235","2001:3701","2001:3703","2001:3704","2001:3705","2001:3762","413c:5513","413c:8102","413c:8104","5041:2234","5041:2235"],"native":"p54usb","path":"in-kernel"},{"id":"rtl8192cu","name":"Realtek RTL8192CU / RTL8188CUS","vendor":"Realtek","wifi":"WiFi 4 (802.11n)","band":"Single-band 2.4 GHz","monitor":true,"injection":false,"quality":"poor","notes":"Extremely common legacy chip (Edimax EW-7811Un, TL-WN725N v2). The in-kernel rtl8xxxu driver gets you online, but monitor mode is flaky and injection is unreliable — fine for connectivity, not for serious attacks. Use an AR9271 or MT7612U for real work.","adapters":["Edimax EW-7811Un","TP-Link TL-WN725N v2","TP-Link TL-WN823N","D-Link DWA-131"],"ids":["04bb:094c","04bb:0950","04f2:aff7","04f2:aff8","04f2:aff9","04f2:affa","04f2:affb","04f2:affc","050d:1004","050d:1102","050d:11f2","050d:2102","050d:2103","0586:341f","06f8:e033","06f8:e035","0789:016d","07aa:0056","07b8:8178","07b8:8189","0846:9021","0846:9041","0846:9043","0846:f001","0b05:17ab","0b05:17ba","0bda:018a","0bda:1e1e","0bda:2e2e","0bda:317f","0bda:5088","0bda:8170","0bda:8176","0bda:8177","0bda:8178","0bda:817a","0bda:817b","0bda:817c","0bda:817d","0bda:817e","0bda:817f","0bda:8186","0bda:818a","0bda:8191","0bda:819a","0bda:8754","0df6:0052","0df6:005c","0df6:0061","0df6:0070","0df6:0077","0e66:0019","0e66:0020","0eb0:9071","103c:1629","1058:0631","13d3:3357","13d3:3358","13d3:3359","2001:3307","2001:3308","2001:3309","2001:330a","2001:330b","2001:330d","2019:1201","2019:4902","2019:ab2a","2019:ab2b","2019:ab2e","2019:ed17","20f4:624d","20f4:648b","2357:0100","4855:0090","4855:0091","4856:0091","7392:7811","7392:7822","9846:9041","cdab:8010"],"native":"rtl8xxxu","path":"DKMS → offline"},{"id":"rtl8723bu","name":"Realtek RTL8723BU (WiFi + BT combo)","vendor":"Realtek","wifi":"WiFi 4 (802.11n)","band":"Single-band 2.4 GHz","monitor":true,"injection":false,"quality":"poor","notes":"Budget WiFi+Bluetooth combo chip found in many cheap dongles and laptops. In-kernel rtl8xxxu provides connectivity; monitor/injection are unreliable. Included so AirDriver can still get you online.","adapters":["Generic WiFi+BT combo dongles","various laptops"],"ids":["0bda:b720","0bda:b728","0bda:b72a","7392:a611"],"native":"rtl8xxxu","path":"DKMS → offline"},{"id":"rtl8710bu","name":"Realtek RTL8710BU / RTL8188GU","vendor":"Realtek","wifi":"WiFi 4 (802.11n)","band":"Single-band 2.4 GHz","monitor":true,"injection":false,"quality":"poor","notes":"Newer budget 2.4 GHz chip (aka RTL8188GU) in cheap nano dongles. Many ship in USB CD-ROM/flip-storage mode (shown as 0bda:1a2b) and need usb-modeswitch before the Wi-Fi device (0bda:b711) appears. In-kernel support is immature; the lwfinger DKMS driver (module 8188gu) gives connectivity and monitor-mode sniffing, but injection is unreliable — connect-only, not attack-grade.","adapters":["Tenda W311MI","Generic RTL8710BU / RTL8188GU nano dongles"],"ids":["0bda:2005","0bda:b711"],"native":"","path":"DKMS → offline"},{"id":"mt7601u","name":"MediaTek / Ralink MT7601U","vendor":"MediaTek","wifi":"WiFi 4 (802.11n)","band":"Single-band 2.4 GHz","monitor":true,"injection":false,"quality":"poor","notes":"Ultra-cheap single-band nano dongle, in-kernel mt7601u since 4.2 (needs the mt7601u.bin firmware blob). Monitor mode works for sniffing but the driver does not support packet injection — good for getting a box online, not for active attacks.","adapters":["Generic MT7601U nano dongles","Ralink MT7601U"],"ids":["0b05:17d3","0e8d:7601","0e8d:760a","0e8d:760b","13d3:3431","13d3:3434","148f:7601","148f:760b","148f:760c","148f:760d","2001:3d04","2717:4106","2955:0001","2955:1001","2955:1003","2a5f:1000","7392:7710"],"native":"mt7601u","path":"in-kernel"},{"id":"ar9170","name":"Atheros AR9170 (carl9170)","vendor":"Qualcomm Atheros","wifi":"WiFi 4 (802.11n draft)","band":"Dual-band 2.4 + 5 GHz","monitor":true,"injection":false,"quality":"poor","notes":"Legacy draft-N USB chip, in-kernel via carl9170 (needs the carl9170-1.fw firmware blob). Monitor mode works but injection support is weak — kept for completeness and older kits. Prefer AR9271 for 2.4 GHz injection.","adapters":["TP-Link TL-WN821N v1/v2","TP-Link TL-WN822N v1","Netgear WNDA3100 v1","D-Link DWA-160 A1/A2"],"ids":["0409:0249","0409:02b4","04bb:093f","057c:8401","057c:8402","0586:3417","07d1:3a09","07d1:3a0f","07d1:3c10","083a:f522","0846:9001","0846:9010","0846:9040","0ace:1221","0cde:0023","0cde:0026","0cde:0027","0cf3:1001","0cf3:1002","0cf3:1010","0cf3:1011","0cf3:9170","1435:0326","1435:0804","1668:1200","1740:0605","1b75:9170","2019:5304","cace:0300"],"native":"carl9170","path":"in-kernel"},{"id":"intel_ax2xx","name":"Intel WiFi 6/6E (AX200 / AX201 / AX210 / AX211)","vendor":"Intel","wifi":"WiFi 6 / 6E (802.11ax)","band":"Dual/Tri-band AX (2.4 + 5 + 6 GHz)","monitor":true,"injection":false,"quality":"poor","notes":"Ubiquitous internal laptop cards. In-kernel iwlwifi (needs the firmware-iwlwifi blobs). Monitor mode works for sniffing, but Intel cards do NOT reliably support packet injection — use an external AR9271/MT7612U/RTL8812AU adapter for attacks.","adapters":["Intel AX200","Intel AX201","Intel AX210","Intel AX211"],"ids":["8086:02f0","8086:06f0","8086:2723","8086:2725","8086:2729","8086:34f0","8086:3df0","8086:43f0","8086:4df0","8086:51f0","8086:51f1","8086:54f0","8086:7a70","8086:7af0","8086:7e40","8086:7f70","8086:a0f0"],"native":"iwlwifi","path":"in-kernel"},{"id":"rtl8723au","name":"Realtek RTL8723AU (WiFi + BT combo)","vendor":"Realtek","wifi":"WiFi 4 (802.11n)","band":"Single-band 2.4 GHz","monitor":true,"injection":false,"quality":"poor","notes":"Older WiFi+Bluetooth combo chip found in budget laptops and dongles. The in-kernel rtl8xxxu driver gets you online; monitor mode is limited and injection is not usable. Connect-only — pair it with an AR9271 or MT7612U for attack work.","adapters":["Generic WiFi+BT combo dongles","older laptops"],"ids":["0bda:0724","0bda:1724","0bda:8724"],"native":"rtl8xxxu","path":"in-kernel"},{"id":"rtl8192fu","name":"Realtek RTL8192FU / RTL8188FU-variant","vendor":"Realtek","wifi":"WiFi 4 (802.11n)","band":"Single-band 2.4 GHz, 2x2","monitor":true,"injection":false,"quality":"poor","notes":"Newer budget 2.4 GHz Realtek USB chip. Mainline rtl8xxxu gained RTL8192FU support in kernel 6.2 — on older kernels the adapter will not work out of the box and needs the out-of-tree driver. Monitor mode works for sniffing; injection is unreliable.","adapters":["Generic RTL8192FU dongles","Tenda U10 / TP-Link variants"],"ids":["0b05:18f1","0bda:318b","0bda:f192","2001:3328","2357:0135","7392:b722"],"native":"rtl8xxxu","path":"in-kernel → DKMS"},{"id":"ath10k_pci","name":"Qualcomm Atheros QCA6174 / QCA9377 / QCA988x (ath10k)","vendor":"Qualcomm Atheros","wifi":"WiFi 5 (802.11ac)","band":"Dual-band AC (2.4 + 5 GHz)","monitor":true,"injection":false,"quality":"poor","notes":"Extremely common in 2015-2020 laptops. Monitor mode works, but injection is unreliable-to-broken in the ath10k firmware — this is a firmware limitation, not a driver bug, so no amount of reinstalling fixes it. Use an external USB adapter for injection work. Needs the linux-firmware ath10k blobs.","adapters":["Killer 1435","Dell DW1810","Lenovo QCA9377","HP QCA6174"],"ids":["0777:11ac","168c:003c","168c:003e","168c:0040","168c:0041","168c:0042","168c:0046","168c:0050","168c:0056"],"native":"ath10k_pci","path":"in-kernel"},{"id":"iwlwifi_legacy","name":"Intel Wireless 7260 / 7265 / 3165 / 8260 / 8265 / 9260 / 9560","vendor":"Intel","wifi":"WiFi 5 (802.11ac)","band":"Dual-band AC (2.4 + 5 GHz)","monitor":true,"injection":false,"quality":"poor","notes":"The internal card in a huge share of 2014-2020 laptops. The driver is in-kernel and 'just works' for normal Wi-Fi, but Intel firmware does not support packet injection and monitor mode is limited — you can sniff, mostly not inject. Keep it for connectivity and use a USB adapter for attacks. Needs the iwlwifi firmware package.","adapters":["Intel Wireless-AC 7260","Intel Wireless-AC 8265","Intel Wireless-AC 9560","Intel Dual Band Wireless-AC 3165"],"ids":["8086:08b1","8086:08b2","8086:08b3","8086:08b4","8086:095a","8086:095b","8086:24f3","8086:24f4","8086:24f5","8086:24f6","8086:24fb","8086:24fd","8086:2526","8086:271b","8086:271c","8086:30dc","8086:3165","8086:3166","8086:31dc","8086:9df0","8086:a370"],"native":"iwlwifi","path":"in-kernel"},{"id":"intel_be200","name":"Intel WiFi 7 BE200 / BE201","vendor":"Intel","wifi":"WiFi 7 (802.11be)","band":"Tri-band BE (2.4 + 5 + 6 GHz)","monitor":true,"injection":false,"quality":"poor","notes":"Intel's WiFi 7 card, shipping in 2024+ laptops. Requires kernel 6.7 or newer plus current linux-firmware — on an older kernel it simply does not appear. As with every Intel part, injection is not supported. Note it is CNVi-based: it will not work in a plain M.2 slot on an AMD machine, which is a hardware limitation no driver can fix.","adapters":["Intel BE200NGW","Intel BE201"],"ids":["8086:272b","8086:4d40","8086:6e70","8086:7740","8086:9327","8086:a840","8086:d240","8086:d340","8086:e340","8086:e440"],"native":"iwlwifi","path":"in-kernel"},{"id":"rtw89_pci","name":"Realtek RTL8852AE / RTL8852BE / RTL8852CE / RTL8922AE (internal PCIe)","vendor":"Realtek","wifi":"WiFi 6 / 6E / 7 (802.11ax / be)","band":"Dual/tri-band AX (2.4 + 5 + 6 GHz, model dependent)","monitor":true,"injection":false,"quality":"poor","notes":"Realtek's current internal Wi-Fi 6/6E/7 cards, very common in 2022+ budget and gaming laptops. In-kernel rtw89 handles them from 5.16 (8852AE) through 6.8 (8922AE); older kernels need a backport. Monitor mode works on recent kernels, injection is not usable yet.","adapters":["RTL8852AE","RTL8852BE","RTL8852CE","RTL8922AE","RTL8851BE"],"ids":["10ec:8852","10ec:b852","10ec:c852","10ec:8922","10ec:b851"],"native":"rtw89_pci","path":"in-kernel → DKMS"},{"id":"rtlwifi_pci","name":"Realtek RTL8188CE / RTL8192CE / RTL8723AE / RTL8723BE / RTL8821AE","vendor":"Realtek","wifi":"WiFi 4/5 (802.11n / ac)","band":"2.4 GHz (5 GHz on 8821AE/8812AE)","monitor":true,"injection":false,"quality":"poor","notes":"Older internal Realtek PCIe cards, handled in-kernel by rtlwifi. They connect fine but are a poor pentest choice: injection does not work and monitor mode is flaky. If Wi-Fi is unstable on a RTL8723BE, the usual fix is the antenna-selection option: 'options rtl8723be ant_sel=2' in /etc/modprobe.d/.","adapters":["Lenovo RTL8723BE","HP RTL8188CE","Acer RTL8821AE"],"ids":["10ec:8176","10ec:8177","10ec:8178","10ec:8179","10ec:8723","10ec:b723","10ec:8812","10ec:8821","10ec:8192","10ec:8171","10ec:8172","10ec:8173","10ec:8174"],"native":"rtlwifi","path":"in-kernel"},{"id":"intel_legacy_n","name":"Intel Centrino / Wireless-N (1000–6000 series)","vendor":"Intel","wifi":"WiFi 4 (802.11n)","band":"Dual-band N (2.4 + 5 GHz, model dependent)","monitor":true,"injection":false,"quality":"poor","notes":"The internal card in most 2009–2013 laptops. In-kernel iwlwifi, needs the firmware-iwlwifi blobs. Monitor mode works for sniffing, but Intel cards do not reliably inject — use an external AR9271/MT7612U/RTL8812AU for attacks.","adapters":["Intel WiFi Link 5100/5300","Centrino Advanced-N 6205","Centrino Wireless-N 2200","Ultimate-N 6300","Centrino Wireless-N 1000"],"ids":["8086:0082","8086:0083","8086:0084","8086:0085","8086:0087","8086:0089","8086:008a","8086:008b","8086:0090","8086:0091","8086:0885","8086:0886","8086:0887","8086:0888","8086:088e","8086:088f","8086:0890","8086:0891","8086:0892","8086:0893","8086:0894","8086:0895","8086:0896","8086:0897","8086:08ae","8086:08af","8086:422b","8086:422c","8086:4232","8086:4235","8086:4236","8086:4237","8086:4238","8086:4239","8086:423a","8086:423b","8086:423c","8086:423d"],"native":"iwlwifi","path":"in-kernel"},{"id":"rtl8188fu","name":"Realtek RTL8188FTV / RTL8188FU","vendor":"Realtek","wifi":"WiFi 4 (802.11n)","band":"Single-band 2.4 GHz","monitor":false,"injection":false,"quality":"poor","notes":"Budget chip found in cheap dongles. Limited/unreliable monitor support — not recommended for serious work, included so AirDriver can still get the user online.","adapters":["Generic 'mini' 2.4 GHz dongles"],"ids":["0bda:f179","0bda:f180"],"native":"rtl8xxxu","path":"DKMS → offline"},{"id":"rtl8821ce","name":"Realtek RTL8821CE (internal PCIe)","vendor":"Realtek","wifi":"WiFi 5 (802.11ac)","band":"Dual-band AC (2.4 + 5 GHz)","monitor":false,"injection":false,"quality":"poor","notes":"Very common internal laptop card (Lenovo/HP/Acer). The #1 'my fresh Kali install has no WiFi' chip. In-kernel rtw88_8821ce since ~5.8 gets you online; monitor/injection are not supported — use a USB adapter for pentesting.","adapters":["Lenovo IdeaPad / HP / Acer laptops"],"ids":["10ec:c821"],"native":"rtw88_8821ce","path":"DKMS → offline"},{"id":"rtl8822ce","name":"Realtek RTL8822CE (internal PCIe)","vendor":"Realtek","wifi":"WiFi 5 (802.11ac)","band":"Dual-band AC1200 (2.4 + 5 GHz)","monitor":false,"injection":false,"quality":"poor","notes":"Common internal laptop card. In-kernel rtw88_8822ce since ~5.3 provides connectivity; not suitable for monitor mode / injection — pair it with a USB pentest adapter.","adapters":["Lenovo / HP / Dell laptops"],"ids":["10ec:c822","10ec:c82f"],"native":"rtw88_8822ce","path":"DKMS"},{"id":"rtl8723de","name":"Realtek RTL8723DE (internal PCIe)","vendor":"Realtek","wifi":"WiFi 4 (802.11n)","band":"Single-band 2.4 GHz","monitor":false,"injection":false,"quality":"poor","notes":"Budget internal laptop card. In-kernel rtw88_8723de gets you online; no monitor/injection support. Included to fix 'no WiFi after install' on cheap laptops.","adapters":["budget laptops"],"ids":["10ec:d723"],"native":"rtw88_8723de","path":"DKMS"},{"id":"broadcom_sta","name":"Broadcom BCM43xx (internal, wl / b43)","vendor":"Broadcom","wifi":"WiFi 4/5 (802.11n / ac)","band":"Dual-band (model dependent)","monitor":false,"injection":false,"quality":"poor","notes":"The single most painful Wi-Fi family on Kali, and the honest answer is that it cannot do what you want: the proprietary 'wl' driver supports neither monitor mode nor injection. AirDriver installs broadcom-sta-dkms so you at least get working internet, and blacklists the conflicting b43/brcmsmac modules. Some older cards do monitor fine on the open b43 driver instead (firmware-b43-installer) — worth trying if yours is pre-2012. For any actual pentest work, use a USB adapter.","adapters":["MacBook BCM4360","Dell DW1550","Lenovo BCM43142","HP BCM4313"],"ids":["14e4:4311","14e4:4312","14e4:4313","14e4:4315","14e4:4318","14e4:4319","14e4:4320","14e4:4321","14e4:4322","14e4:4324","14e4:4325","14e4:4328","14e4:4329","14e4:432a","14e4:432b","14e4:432c","14e4:432d","14e4:4331","14e4:4350","14e4:4351","14e4:4352","14e4:4353","14e4:4357","14e4:4358","14e4:4359","14e4:435a","14e4:4360","14e4:4365","14e4:43a0","14e4:43a1","14e4:43a2","14e4:43b1","14e4:43ba","14e4:43bb","14e4:43bc","14e4:4727","14e4:a8d8"],"native":"","path":"apt"},{"id":"ath11k_qca6390","name":"Qualcomm QCA6390 / WCN6855 (ath11k)","vendor":"Qualcomm","wifi":"WiFi 6 / 6E (802.11ax)","band":"Dual/Tri-band AX (2.4 + 5 + 6 GHz)","monitor":false,"injection":false,"quality":"poor","notes":"Very common in 2021+ laptops — and it cannot sniff. The kernel's own ath11k hardware table sets supports_monitor = false for QCA6390 and WCN6855, and ath11k then clears NL80211_IFTYPE_MONITOR from the interface modes at registration, so monitor mode is not merely unreliable — it is never offered. No airmon-ng invocation changes that. Fine for ordinary Wi-Fi; use an external adapter for any capture or injection work.","adapters":["Dell/Lenovo/HP QCA6390 modules","Killer AX1675","WCN6855 (many 2022+ laptops)"],"ids":["17cb:1101","17cb:1103"],"native":"ath11k_pci","path":"in-kernel"},{"id":"brcmfmac","name":"Broadcom FullMAC (brcmfmac — PCIe + USB)","vendor":"Broadcom / Cypress","wifi":"WiFi 5/6 (802.11ac / ax)","band":"Dual-band (model dependent)","monitor":false,"injection":false,"quality":"poor","notes":"The open in-kernel Broadcom driver — and, like the proprietary wl driver, it will not sniff. brcmfmac is FullMAC: the MAC lives in firmware, so it never goes through mac80211 and only advertises monitor mode when the firmware reports a monitor feature flag, which consumer firmware does not. This is the chip in Raspberry Pi 3/4/5 and many laptops and Macs. It is listed so AirDriver identifies it and tells you the truth up front, rather than leaving you to find out with airmon-ng. Use an external adapter for capture or injection.","adapters":["Raspberry Pi 3/4/5 (BCM43430/43455)","MacBook BCM4364","Dell BCM4356","Cypress CYW43012"],"ids":["04b4:0bdc","04b4:bd29","0a5c:0bdc","0a5c:bd17","0a5c:bd1e","0a5c:bd1f","0a5c:bd27","13b1:0039","14e4:4354","14e4:4355","14e4:43a3","14e4:43c3","14e4:43c4","14e4:43c5","14e4:43ca","14e4:43cb","14e4:43cc","14e4:43d3","14e4:43d9","14e4:43dc","14e4:43e9","14e4:43ec","14e4:43ef","14e4:440d","14e4:4415","14e4:4425","14e4:4433","14e4:4464","14e4:4488","14e4:449d","14e4:aa31"],"native":"brcmfmac","path":"in-kernel"},{"id":"ath11k_qcn9074","name":"Qualcomm QCN9074 (ath11k)","vendor":"Qualcomm","wifi":"WiFi 6 / 6E (802.11ax)","band":"Dual/Tri-band AX (2.4 + 5 + 6 GHz)","monitor":true,"injection":false,"quality":"unknown","notes":"Unlike its QCA6390/WCN6855 siblings the kernel marks this one supports_monitor = true, so monitor mode is available. Injection on ath11k is not something AirDriver can vouch for, so it is flagged unknown rather than promised. Mostly an AP/enterprise card rather than a laptop module.","adapters":["QCN9074 M.2 modules","Compex WLE3000H5"],"ids":["17cb:1104"],"native":"ath11k_pci","path":"in-kernel"},{"id":"ath12k_wcn7850","name":"Qualcomm WCN7850 (ath12k, Wi-Fi 7)","vendor":"Qualcomm","wifi":"WiFi 7 (802.11be)","band":"Tri-band BE (2.4 + 5 + 6 GHz)","monitor":true,"injection":false,"quality":"unknown","notes":"The Wi-Fi 7 module in many 2024+ laptops. The kernel marks it supports_monitor = true, so unlike the QCA6390/WCN6855 generation it can actually sniff. Injection is unproven on ath12k and is flagged unknown rather than claimed. Needs a recent kernel and current linux-firmware.","adapters":["Qualcomm FastConnect 7800","WCN7850 M.2 modules"],"ids":["17cb:1107"],"native":"ath12k_pci","path":"in-kernel"},{"id":"ath12k_qcn9274","name":"Qualcomm QCN9274 / QCC2072 (ath12k)","vendor":"Qualcomm","wifi":"WiFi 7 (802.11be)","band":"Tri-band BE (2.4 + 5 + 6 GHz)","monitor":true,"injection":false,"quality":"unknown","notes":"AP-class Wi-Fi 7 silicon. supports_monitor = true on hw2.0, but false on the earlier hw1.0 revision, which shares this PCI id — AirDriver cannot tell the two revisions apart from the id alone, so verify before relying on capture. Injection unproven, flagged unknown.","adapters":["QCN9274 reference boards","QCC2072 modules"],"ids":["17cb:1109","17cb:1112"],"native":"ath12k_pci","path":"in-kernel"},{"id":"ar5523","name":"Atheros AR5523 (USB)","vendor":"Atheros","wifi":"WiFi 4 (802.11a/b/g)","band":"Dual-band a/b/g (2.4 + 5 GHz, model dependent)","monitor":true,"injection":false,"quality":"unknown","notes":"Atheros' USB part from the AR5xxx era. In-kernel ar5523 is a mac80211 driver so monitor mode comes for free, but the driver advertises only station mode itself and injection is not something AirDriver can vouch for — flagged unknown rather than promised. Needs the ar5523 firmware blob; the device enumerates under a second 'pre-firmware' id until that loads, and both ids are listed here.","adapters":["Netgear WG111T","D-Link DWL-G132","Netgear WPN111"],"ids":["07d1:3a07","07d1:3a08","083a:4506","083a:4507","0846:4250","0846:4251","0846:4300","0846:4301","0846:5f00","0846:5f01","0cde:0012","0cde:0013","0cf3:0001","0cf3:0002","0cf3:0003","0cf3:0004","0cf3:0005","0cf3:0006","0d8e:7801","0d8e:7802","0d8e:7803","0d8e:7811","0d8e:7812","129b:160b","129b:160c","1385:4250","1385:4251","1385:5f00","1385:5f01","1385:5f02","1385:5f03","1435:0826","1435:0827","1435:0828","1435:0829","157e:3006","157e:3007","157e:3205","157e:3206","168c:0001","168c:0002","1690:0710","1690:0711","1690:0712","1690:0713","16ab:7801","16ab:7802","16ab:7811","16ab:7812","2001:3a00","2001:3a01","2001:3a02","2001:3a03","2001:3a04","2001:3a05"],"native":"ar5523","path":"in-kernel"}];
+const rowsEl = document.getElementById('rows');
+const emptyEl = document.getElementById('empty');
+const countEl = document.getElementById('count');
+const qEl = document.getElementById('q');
+const fMon = document.getElementById('f-mon');
+const fInj = document.getElementById('f-inj');
+
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const mark = b => b ? '<span class="yes">yes</span>' : '<span class="no">no</span>';
+
+function render(list){
+  rowsEl.innerHTML = list.map((c, i) => {
+    const inj = c.injection ? '<span class="yes">yes</span>'
+              : (c.quality === 'unknown' ? '<span class="maybe">unknown</span>' : '<span class="no">no</span>');
+    return `<tr class="chip-row" data-i="${i}">
+      <td><span class="name">${esc(c.name)}</span><span class="vendor">${esc(c.vendor)} · ${esc(c.wifi)}</span></td>
+      <td>${esc(c.band)}</td>
+      <td>${mark(c.monitor)}</td>
+      <td>${inj}</td>
+      <td><span class="q ${esc(c.quality)}">${esc(c.quality)}</span></td>
+      <td>${esc(c.path)}${c.native ? `<span class="vendor">${esc(c.native)}</span>` : ''}</td>
+      <td>${c.ids.length}</td>
+    </tr>
+    <tr class="detail hidden" data-d="${i}"><td colspan="7">
+      ${esc(c.notes)}
+      ${c.adapters.length ? `<div style="margin-top:8px"><b style="color:var(--dim);font-weight:600">Known adapters:</b> ${esc(c.adapters.join(', '))}</div>` : ''}
+      <div class="ids"><b>${c.ids.length} IDs:</b> ${c.ids.map(esc).join('  ')}</div>
+    </td></tr>`;
+  }).join('');
+  countEl.textContent = `${list.length} of ${DATA.length} families · ${list.reduce((n,c)=>n+c.ids.length,0)} IDs`;
+  emptyEl.classList.toggle('hidden', list.length > 0);
+}
+
+function apply(){
+  const q = qEl.value.trim().toLowerCase();
+  const needMon = fMon.getAttribute('aria-pressed') === 'true';
+  const needInj = fInj.getAttribute('aria-pressed') === 'true';
+  render(DATA.filter(c => {
+    if (needMon && !c.monitor) return false;
+    if (needInj && !c.injection) return false;
+    if (!q) return true;
+    return (c.name + ' ' + c.vendor + ' ' + c.wifi + ' ' + c.band + ' ' + c.id + ' ' +
+            c.adapters.join(' ') + ' ' + c.ids.join(' ') + ' ' + c.notes).toLowerCase().includes(q);
+  }));
+}
+
+rowsEl.addEventListener('click', e => {
+  const tr = e.target.closest('tr.chip-row');
+  if (!tr) return;
+  const d = rowsEl.querySelector(`tr.detail[data-d="${tr.dataset.i}"]`);
+  if (d) d.classList.toggle('hidden');
+});
+[fMon, fInj].forEach(b => b.addEventListener('click', () => {
+  b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') === 'true' ? 'false' : 'true');
+  apply();
+}));
+qEl.addEventListener('input', apply);
+apply();
+
+// Deep-link straight to a vid:pid, e.g. #q=0bda:8812
+if (location.hash.startsWith('#q=')) {
+  qEl.value = decodeURIComponent(location.hash.slice(3));
+  apply();
+  document.getElementById('chipsets').scrollIntoView();
+}
+</script>
+<script type="module">
+  // Progressive enhancement: if the CDN is unreachable the <pre> simply stays as text.
+  try {
+    const {default: mermaid} = await import('https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs');
+    mermaid.initialize({startOnLoad:false, theme:'dark',
+      themeVariables:{background:'#131a23', primaryColor:'#182130', lineColor:'#5d6b7a'}});
+    await mermaid.run({querySelector:'.mermaid'});
+  } catch (e) { /* leave the source visible */ }
+</script>
+</body>
+</html>

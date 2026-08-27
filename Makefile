@@ -5,7 +5,7 @@ VPY   := $(VENV)/bin/python
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install setup gui run scan doctor db offline clean uninstall purge test shots
+.PHONY: help install setup gui run scan doctor db offline clean uninstall purge test shots site
 
 help: ## Show this help
 	@echo "AirDriver — make targets:"
@@ -52,3 +52,6 @@ test: setup ## Run the test suite
 
 shots: setup ## Regenerate the GUI screenshots in docs/screenshots/
 	QT_QPA_PLATFORM=offscreen AIRDRIVER_FORCE_GUI=1 $(VPY) scripts/gen_screenshots.py
+
+site: ## Regenerate the GitHub Pages site in docs/ from the chipset database
+	$(PY) scripts/gen_site.py
