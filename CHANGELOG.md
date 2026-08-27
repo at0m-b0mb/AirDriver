@@ -2,6 +2,74 @@
 
 All notable changes to AirDriver are documented here.
 
+## [0.8.0] — 2026-08-27 · "Wider Net"
+
+**52 chipset families / 1258 USB+PCI IDs**, up from 40 / 858 — twelve new families, and
+capability flags that are now sourced from the kernel rather than from reputation.
+
+### Added — 12 families (+400 IDs), every id from a kernel device table
+
+| Family | IDs | Monitor | Injection |
+|---|--:|:--:|:--:|
+| Intel Centrino / Wireless-N (1000–6000) | 38 | yes | no |
+| Qualcomm QCA6390 / WCN6855 (`ath11k`) | 2 | **no** | no |
+| Qualcomm QCN9074 (`ath11k`) | 1 | yes | unknown |
+| Qualcomm WCN7850 — Wi-Fi 7 (`ath12k`) | 1 | yes | unknown |
+| Qualcomm QCN9274 / QCC2072 (`ath12k`) | 2 | yes | unknown |
+| Atheros AR5xxx legacy PCI (`ath5k`) | 21 | yes | **good** |
+| ZyDAS ZD1211 / ZD1211B | 58 | yes | fair |
+| Atheros AR5523 USB | 55 | yes | unknown |
+| Ralink RT2501USB / RT73 | 74 | yes | **good** |
+| Ralink RT2500USB (RT2570) | 29 | yes | fair |
+| Intersil/Conexant Prism54 USB | 63 | yes | fair |
+| Broadcom FullMAC (`brcmfmac`) | 31 | **no** | no |
+
+Existing Intel and Atheros families were widened from the same tables: `iwlwifi_legacy`
++5, `intel_ax2xx` +10, `intel_be200` +9, `ath10k_pci` +1.
+
+### Changed — capability flags are now evidence, not folklore
+
+The monitor/injection flags are the promise this project makes, so they are read out of
+the kernel source rather than asserted:
+
+- **mac80211 always adds monitor.** `net/mac80211/main.c` does
+  `hw->wiphy->interface_modes |= BIT(NL80211_IFTYPE_MONITOR)` under the comment
+  *"mac80211 always supports monitor"*. Every softmac family here inherits that, which is
+  why the legacy USB parts are flagged monitor-capable even where their own driver
+  advertises only station mode.
+- **`ath11k` takes it away again, per chipset.** `hw_params.supports_monitor` is `false`
+  for **QCA6390** and **WCN6855**, and ath11k then clears `NL80211_IFTYPE_MONITOR` right
+  after `ieee80211_register_hw()`. These are extremely common in 2021+ laptops, so the
+  entry says plainly that monitor mode is never offered — no airmon-ng invocation changes
+  it. The flag is not pessimism; it is the driver's own table.
+- **`ath12k` sets it true for WCN7850**, so the Wi-Fi 7 generation *can* sniff where its
+  QCA6390 predecessor cannot. The two are deliberately separate families so one flag
+  can't launder the other.
+- **`brcmfmac` is FullMAC** — it never goes through mac80211 and only advertises monitor
+  when firmware reports the feature, which consumer firmware does not. Raspberry Pi and
+  MacBook Wi-Fi are flagged accordingly.
+- **Injection is claimed only where there is a track record.** ath11k/ath12k and AR5523
+  are flagged `unknown` rather than `true`, and `recommend` therefore won't suggest them
+  for attack work. Promising injection AirDriver can't stand behind is worse than
+  admitting the gap.
+
+### Changed — an ambiguous ID is omitted, not guessed
+
+`050d:7050` and `0707:ee13` each appear in **more than one** kernel driver's device
+table, so the chipset genuinely cannot be determined from the id. Rather than pick a
+winner, both are left out: they surface as "unknown adapter" and route into
+`airdriver contribute`. A wrong id installs the wrong driver, which is the one failure
+mode this database exists to prevent.
+
+### Tests
+
+- **107 tests** (was 101). `EvidenceBackedCapabilities` pins the flags that came from
+  kernel source — QCA6390/WCN6855 must stay non-sniffing, WCN7850 must stay sniffing,
+  FullMAC Broadcom must never claim monitor — so a well-meaning "fix" can't quietly make
+  the database optimistic. Also enforced: injection implies monitor, every quality value
+  is on the declared scale, and the two ambiguous ids resolve to nothing.
+- Database floors in the suite and the CI GUI job raised to the current 52 families.
+
 ## [0.7.0] — 2026-08-27 · "Ground Truth"
 
 Detection now reads the kernel's own view of your hardware instead of shelling out to

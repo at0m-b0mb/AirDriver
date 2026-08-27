@@ -59,6 +59,6 @@ jobs:
               app.processEvents()   # let the scan worker finish, then tear down cleanly
           w.grab()
           w.close()
-          assert len(w.db) >= 40, "chipset database shrank unexpectedly"
+          assert len(w.db) >= 52, "chipset database shrank unexpectedly"
           print("GUI OK — families:", len(w.db), "ids:", w.db.usb_id_count())
           PY

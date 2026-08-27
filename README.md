@@ -7,7 +7,7 @@
 [![Platform](https://img.shields.io/badge/platform-Kali%20%7C%20Parrot%20%7C%20Debian-1f9e72?style=flat-square)](https://www.kali.org/)
 [![Python](https://img.shields.io/badge/python-3.9%2B-2ee6a6?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![GUI](https://img.shields.io/badge/GUI-PySide6-38bdf8?style=flat-square&logo=qt&logoColor=white)](https://doc.qt.io/qtforpython/)
-[![Chipsets](https://img.shields.io/badge/chipsets-40%20families%20%C2%B7%20858%20IDs-f5a623?style=flat-square)](airdriver/data/chipsets.json)
+[![Chipsets](https://img.shields.io/badge/chipsets-52%20families%20%C2%B7%201258%20IDs-f5a623?style=flat-square)](airdriver/data/chipsets.json)
 [![CI](https://img.shields.io/github/actions/workflow/status/at0m-b0mb/AirDriver/ci.yml?branch=main&style=flat-square&label=tests)](../../actions)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-2ee6a6?style=flat-square)](CONTRIBUTING.md)
@@ -15,7 +15,7 @@
 **Plug in your adapter → AirDriver identifies the chipset → installs the right driver.**
 
 Built for pentesters who just want monitor mode and packet injection to *work*.
-`Realtek` · `Atheros` · `MediaTek/Ralink` · `Intel` — **40 chipset families · 858 USB/PCI IDs** · hybrid online/offline · a clean GUI **and** a full CLI.
+`Realtek` · `Atheros` · `MediaTek/Ralink` · `Intel` · `Qualcomm` · `Broadcom` — **52 chipset families · 1258 USB/PCI IDs** · hybrid online/offline · a clean GUI **and** a full CLI.
 
 Not just an installer: AirDriver **manages** your drivers — it rebuilds them when a kernel
 upgrade breaks Wi-Fi, signs them for Secure Boot, and tells you honestly whether a card
@@ -126,8 +126,8 @@ them on an air-gapped machine.
   adapters meant for the out-of-tree driver.
 - 📶 **Monitor mode + injection** — enable/disable monitor mode and run an `aireplay-ng`
   injection self-test right from the GUI (or `airdriver monitor status/start/stop/test`).
-- 📚 **Searchable chipset browser** — the GUI's **Chipsets** panel filters all 40 families
-  and 858 IDs by name, vendor, band, or `vid:pid` so you can check a card before you buy.
+- 📚 **Searchable chipset browser** — the GUI's **Chipsets** panel filters all 52 families
+  and 1258 IDs by name, vendor, band, or `vid:pid` so you can check a card before you buy.
 - 🛒 **Buying advice** — `airdriver recommend` ranks the chipsets that genuinely do monitor
   mode *and* injection, preferring ones that need no driver build at all.
 - 🤖 **Scriptable** — `airdriver scan --json` and `airdriver db --json` emit machine-readable
@@ -160,7 +160,7 @@ them on an air-gapped machine.
 
 <br/><br/>
 
-**Know before you buy** — search all 40 chipset families and 858 USB/PCI IDs, with honest monitor/injection flags:
+**Know before you buy** — search all 52 chipset families and 1258 USB/PCI IDs, with honest monitor/injection flags:
 
 <img src="docs/screenshots/gui-chipsets.png" alt="AirDriver chipset browser" width="900">
 
@@ -396,7 +396,7 @@ with the `VID:PID` so it can be added to the database.
 
 ## Supported chipsets
 
-AirDriver knows **40 chipset families** spanning **858 USB/PCI IDs**. Capabilities are
+AirDriver knows **52 chipset families** spanning **1258 USB/PCI IDs**. Capabilities are
 honest — some chips connect fine but can't inject, and AirDriver tells you up front.
 (Run `airdriver db` for the full list, or the **📚 Chipsets** browser in the GUI.)
 
@@ -421,6 +421,8 @@ honest — some chips connect fine but can't inject, and AirDriver tells you up 
 | **MT7610U** | Alfa AWUS036ACHM | 2.4+5 AC600 | good | in-kernel (4.19+) |
 | **MT7921AU** | Alfa AWUS036AXML, Brostrend AX9L | WiFi 6E | good | in-kernel (5.18+) |
 | **MT7925U** | Netgear A9000 | WiFi 7 | good | in-kernel (6.7+) |
+| **AR5xxx (ath5k)** | Atheros AR5212 miniPCI, Ubiquiti SR2/SR5 | 2.4+5 a/b/g | good | in-kernel |
+| **RT73 / RT2501USB** | mid-2000s Ralink USB rebadges | 2.4 G | good | in-kernel + firmware |
 
 ### 👍 Works — fair injection
 
@@ -433,6 +435,9 @@ honest — some chips connect fine but can't inject, and AirDriver tells you up 
 | RTL8192EU | TL-WN822N v4/v5 | 2.4 N | apt → DKMS |
 | RTL8852BU/8832BU | Alfa AWUS036AXM | WiFi 6 | DKMS (morrownr) / in-kernel 6.17+ |
 | RTL8852CU/8832CU | generic AXE | WiFi 6E | DKMS (morrownr) / in-kernel 6.19+ |
+| ZD1211 / ZD1211B | ZyXEL G-220, 3Com 3CRUSB10075 | 2.4 G | in-kernel + firmware |
+| RT2500USB (RT2570) | early Ralink USB rebadges | 2.4 G | in-kernel |
+| Prism54 USB (p54usb) | 3COM 3CRWE254G72, D-Link DWL-G122 | 2.4 G | in-kernel + firmware |
 
 ### 🔌 Connect-only — gets you online, **not** for attacks
 
@@ -446,6 +451,7 @@ honest — some chips connect fine but can't inject, and AirDriver tells you up 
 | RTL8192FU | newer budget 2.4 GHz — needs kernel **6.2+** for the in-kernel driver |
 | MT7601U | ultra-cheap nano — monitor sniffing only, **no injection** |
 | AR9170 (carl9170) | legacy draft-N — weak injection |
+| AR5523 (USB) | legacy a/b/g USB — monitor works, injection **unproven** (flagged unknown, not promised) |
 
 ### 💻 Internal laptop cards (PCIe) — fixes "no WiFi after install"
 
@@ -465,7 +471,13 @@ the [attack-grade](#-attack-grade--reliable-monitor-mode--injection) list instea
 | RTL8852AE / 8852BE / 8852CE / 8922AE | 2022+ budget & gaming laptops | `rtw89` (5.16+) | ✅ | ❌ |
 | RTL8821CE / RTL8822CE / RTL8723DE | very common Lenovo/HP/Acer cards | `rtw88` | ✅ | ❌ |
 | RTL8188CE / 8192CE / 8723AE / 8723BE / 8821AE | older Realtek PCIe | `rtlwifi` | ✅ | ❌ |
+| **Qualcomm QCA6390 / WCN6855** | 2021+ Dell/Lenovo/HP, Killer AX1675 | `ath11k` | ❌ **cannot** | ❌ |
+| Qualcomm QCN9074 | AP/enterprise M.2 | `ath11k` (5.13+) | ✅ | ❓ unproven |
+| Qualcomm WCN7850 (WiFi 7) | 2024+ laptops, FastConnect 7800 | `ath12k` (6.3+) | ✅ | ❓ unproven |
+| Intel 1000–6000 / Centrino-N | 2009–2013 laptops | `iwlwifi` | ✅ | ❌ |
+| **Atheros AR5xxx** | pre-2008 miniPCI, Ubiquiti SR-series | `ath5k` (in-kernel) | ✅ | 🏆 **good** |
 | **Broadcom BCM43xx** | MacBooks, DW1550, BCM43142 | `broadcom-sta-dkms` (`wl`) | ❌ | ❌ |
+| **Broadcom FullMAC** | Raspberry Pi 3/4/5, MacBook BCM4364 | `brcmfmac` (in-kernel) | ❌ **cannot** | ❌ |
 
 > **Atheros `ath9k` is the one to have.** It's in-kernel, needs no firmware blob, and has
 > the most reliable monitor mode and injection of any chipset in the database — better
@@ -603,7 +615,7 @@ AirDriver/
 │   │   ├── chipset_db.py    detector.py   system.py    verify.py
 │   │   ├── installer.py     monitor.py    modules.py   report.py
 │   │   └── manage.py        # status · rebuild · sign · modeswitch · recommend
-│   ├── data/chipsets.json   # the chipset → driver database (40 families)
+│   ├── data/chipsets.json   # the chipset → driver database (52 families)
 │   ├── data/drivers/        # offline driver bundle (populated by script)
 │   ├── gui/             # PySide6 app (theme, main window)
 │   └── cli.py           # full-featured command line
@@ -621,7 +633,13 @@ AirDriver/
 - Bootable USB persistence profile
 - AppImage / `.deb` packaging
 
-Recently shipped in **v0.7.0 "Ground Truth"**: detection rewritten to read **sysfs
+Recently shipped in **v0.8.0 "Wider Net"**: **12 new chipset families (+400 IDs)** taking
+the database to **52 families / 1258 IDs** — Qualcomm `ath11k`/`ath12k`, Broadcom
+`brcmfmac`, Intel Centrino-N, and the classic `ath5k`/`rt73usb`/`zd1211rw`/`p54usb`
+injection chipsets. Capability flags are now read out of the kernel source rather than
+asserted, which is how **QCA6390/WCN6855 are marked as unable to sniff at all**
+(`supports_monitor = false` in ath11k's own table) while WCN7850 is marked as able.
+Before that, **v0.7.0 "Ground Truth"**: detection rewritten to read **sysfs
 directly** — a missing `lsusb` used to make AirDriver fall back to *demo mode* and
 present three fabricated adapters on real hardware; wireless interfaces are now matched
 to adapters **by sysfs device path** instead of being handed to the first PCI card, which

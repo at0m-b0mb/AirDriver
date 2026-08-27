@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
-  "updated": "2026-08-02",
+  "updated": "2026-08-27",
   "_about": "AirDriver chipset database. Maps USB/PCI VID:PID -> chipset -> driver install strategy. 'usb_ids' are lowercase 'vid:pid' (works for PCI ids too). 'kernel_native' tells AirDriver when an in-kernel driver already exists so it can SKIP a pointless DKMS build. 'drivers' are tried in 'priority' order (1 = first). 'monitor_mode'/'injection' are honest capability flags for pentest use; some chips connect fine but can't inject. Every usb_id is unique across the whole file (enforced by tests/test_chipset_db.py). Extend freely: add entries or usb_ids and AirDriver picks them up on next scan. PRs welcome at https://github.com/at0m-b0mb/AirDriver.",
   "injection_quality_scale": ["unknown", "poor", "fair", "good", "excellent"],
-  "_id_sources": "USB IDs are taken from the Linux kernel's own driver device tables (rtl8xxxu, rt2800usb, ath9k_htc, carl9170, mt76*, rtw88/rtw89, rtl8187) and the morrownr supported-device-IDs lists for out-of-tree drivers. Do not invent ids: a wrong id installs the wrong driver.",
+  "_id_sources": "USB and PCI IDs are taken from the Linux kernel's own driver device tables (rtl8xxxu, rt2800usb, rt73usb, rt2500usb, ath5k, ath9k, ath9k_htc, ath10k, ath11k, ath12k, ar5523, carl9170, zd1211rw, p54usb, mt76*, rtw88/rtw89, rtl8187, iwlwifi, brcmfmac) and the morrownr supported-device-IDs lists for out-of-tree drivers. Capability flags are grounded the same way: mac80211 always adds NL80211_IFTYPE_MONITOR (net/mac80211/main.c), whereas ath11k/ath12k clear it per-hardware via hw_params.supports_monitor and brcmfmac only sets it when the firmware reports the feature. A vid:pid claimed by more than one kernel driver is omitted rather than guessed at. Do not invent ids: a wrong id installs the wrong driver.",
   "chipsets": [
     {
       "id": "rtl8812au",
@@ -650,7 +650,11 @@
       "injection_quality": "poor",
       "notes": "Ubiquitous internal laptop cards. In-kernel iwlwifi (needs the firmware-iwlwifi blobs). Monitor mode works for sniffing, but Intel cards do NOT reliably support packet injection — use an external AR9271/MT7612U/RTL8812AU adapter for attacks.",
       "adapters": ["Intel AX200", "Intel AX201", "Intel AX210", "Intel AX211"],
-      "usb_ids": ["8086:02f0", "8086:2723", "8086:2725", "8086:51f0", "8086:7af0", "8086:7e40", "8086:a0f0"],
+      "usb_ids": [
+        "8086:02f0", "8086:06f0", "8086:2723", "8086:2725", "8086:2729", "8086:34f0",
+        "8086:3df0", "8086:43f0", "8086:4df0", "8086:51f0", "8086:51f1", "8086:54f0",
+        "8086:7a70", "8086:7af0", "8086:7e40", "8086:7f70", "8086:a0f0"
+      ],
       "kernel_native": {"module": "iwlwifi", "min_kernel": "5.2", "recommended_kernel": "6.1", "firmware": "iwlwifi-*.ucode"},
       "drivers": [
         {"method": "kernel_native", "module": "iwlwifi", "firmware_pkg": "firmware-iwlwifi", "priority": 1}
@@ -803,8 +807,8 @@
       "notes": "Extremely common in 2015-2020 laptops. Monitor mode works, but injection is unreliable-to-broken in the ath10k firmware — this is a firmware limitation, not a driver bug, so no amount of reinstalling fixes it. Use an external USB adapter for injection work. Needs the linux-firmware ath10k blobs.",
       "adapters": ["Killer 1435", "Dell DW1810", "Lenovo QCA9377", "HP QCA6174"],
       "usb_ids": [
-        "168c:003c", "168c:003e", "168c:0040", "168c:0041", "168c:0042", "168c:0046",
-        "168c:0050", "168c:0056"
+        "0777:11ac", "168c:003c", "168c:003e", "168c:0040", "168c:0041", "168c:0042",
+        "168c:0046", "168c:0050", "168c:0056"
       ],
       "kernel_native": {"module": "ath10k_pci", "min_kernel": "4.4", "recommended_kernel": "5.15", "firmware": "ath10k/*/firmware-*.bin"},
       "drivers": [
@@ -827,9 +831,10 @@
         "Intel Dual Band Wireless-AC 3165"
       ],
       "usb_ids": [
-        "8086:08b1", "8086:08b2", "8086:095a", "8086:095b", "8086:3165", "8086:3166",
-        "8086:24f3", "8086:24f4", "8086:24fd", "8086:2526", "8086:271b", "8086:271c",
-        "8086:30dc", "8086:31dc", "8086:9df0", "8086:a370"
+        "8086:08b1", "8086:08b2", "8086:08b3", "8086:08b4", "8086:095a", "8086:095b",
+        "8086:24f3", "8086:24f4", "8086:24f5", "8086:24f6", "8086:24fb", "8086:24fd",
+        "8086:2526", "8086:271b", "8086:271c", "8086:30dc", "8086:3165", "8086:3166",
+        "8086:31dc", "8086:9df0", "8086:a370"
       ],
       "kernel_native": {"module": "iwlwifi", "min_kernel": "4.9", "recommended_kernel": "5.15", "firmware": "iwlwifi-*.ucode"},
       "drivers": [
@@ -848,7 +853,10 @@
       "injection_quality": "poor",
       "notes": "Intel's WiFi 7 card, shipping in 2024+ laptops. Requires kernel 6.7 or newer plus current linux-firmware — on an older kernel it simply does not appear. As with every Intel part, injection is not supported. Note it is CNVi-based: it will not work in a plain M.2 slot on an AMD machine, which is a hardware limitation no driver can fix.",
       "adapters": ["Intel BE200NGW", "Intel BE201"],
-      "usb_ids": ["8086:272b"],
+      "usb_ids": [
+        "8086:272b", "8086:4d40", "8086:6e70", "8086:7740", "8086:9327", "8086:a840",
+        "8086:d240", "8086:d340", "8086:e340", "8086:e440"
+      ],
       "kernel_native": {"module": "iwlwifi", "min_kernel": "6.7", "recommended_kernel": "6.10", "firmware": "iwlwifi-be200-*.ucode"},
       "drivers": [
         {"method": "kernel_native", "module": "iwlwifi", "priority": 1, "firmware_pkg": "firmware-iwlwifi"}
@@ -939,6 +947,305 @@
         {"method": "apt", "package": "firmware-b43-installer", "module": "b43", "priority": 2, "distro": ["kali", "parrot", "debian"]}
       ],
       "blacklist": ["b43", "b43legacy", "ssb", "brcmsmac"]
+    },
+    {
+      "id": "intel_legacy_n",
+      "name": "Intel Centrino / Wireless-N (1000–6000 series)",
+      "vendor": "Intel",
+      "wifi": "WiFi 4 (802.11n)",
+      "band": "Dual-band N (2.4 + 5 GHz, model dependent)",
+      "monitor_mode": true,
+      "injection": false,
+      "injection_quality": "poor",
+      "notes": "The internal card in most 2009–2013 laptops. In-kernel iwlwifi, needs the firmware-iwlwifi blobs. Monitor mode works for sniffing, but Intel cards do not reliably inject — use an external AR9271/MT7612U/RTL8812AU for attacks.",
+      "adapters": [
+        "Intel WiFi Link 5100/5300", "Centrino Advanced-N 6205", "Centrino Wireless-N 2200",
+        "Ultimate-N 6300", "Centrino Wireless-N 1000"
+      ],
+      "usb_ids": [
+        "8086:0082", "8086:0083", "8086:0084", "8086:0085", "8086:0087", "8086:0089",
+        "8086:008a", "8086:008b", "8086:0090", "8086:0091", "8086:0885", "8086:0886",
+        "8086:0887", "8086:0888", "8086:088e", "8086:088f", "8086:0890", "8086:0891",
+        "8086:0892", "8086:0893", "8086:0894", "8086:0895", "8086:0896", "8086:0897",
+        "8086:08ae", "8086:08af", "8086:422b", "8086:422c", "8086:4232", "8086:4235",
+        "8086:4236", "8086:4237", "8086:4238", "8086:4239", "8086:423a", "8086:423b",
+        "8086:423c", "8086:423d"
+      ],
+      "kernel_native": {"module": "iwlwifi", "min_kernel": "2.6.32", "recommended_kernel": "5.10", "firmware": "iwlwifi-*.ucode"},
+      "drivers": [
+        {"method": "kernel_native", "module": "iwlwifi", "priority": 1, "firmware_pkg": "firmware-iwlwifi"}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "ath11k_qca6390",
+      "name": "Qualcomm QCA6390 / WCN6855 (ath11k)",
+      "vendor": "Qualcomm",
+      "wifi": "WiFi 6 / 6E (802.11ax)",
+      "band": "Dual/Tri-band AX (2.4 + 5 + 6 GHz)",
+      "monitor_mode": false,
+      "injection": false,
+      "injection_quality": "poor",
+      "notes": "Very common in 2021+ laptops — and it cannot sniff. The kernel's own ath11k hardware table sets supports_monitor = false for QCA6390 and WCN6855, and ath11k then clears NL80211_IFTYPE_MONITOR from the interface modes at registration, so monitor mode is not merely unreliable — it is never offered. No airmon-ng invocation changes that. Fine for ordinary Wi-Fi; use an external adapter for any capture or injection work.",
+      "adapters": ["Dell/Lenovo/HP QCA6390 modules", "Killer AX1675", "WCN6855 (many 2022+ laptops)"],
+      "usb_ids": ["17cb:1101", "17cb:1103"],
+      "kernel_native": {"module": "ath11k_pci", "min_kernel": "5.11", "recommended_kernel": "6.1", "firmware": "ath11k firmware (linux-firmware)"},
+      "drivers": [
+        {"method": "kernel_native", "module": "ath11k_pci", "priority": 1, "firmware_pkg": "firmware-atheros"}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "ath11k_qcn9074",
+      "name": "Qualcomm QCN9074 (ath11k)",
+      "vendor": "Qualcomm",
+      "wifi": "WiFi 6 / 6E (802.11ax)",
+      "band": "Dual/Tri-band AX (2.4 + 5 + 6 GHz)",
+      "monitor_mode": true,
+      "injection": false,
+      "injection_quality": "unknown",
+      "notes": "Unlike its QCA6390/WCN6855 siblings the kernel marks this one supports_monitor = true, so monitor mode is available. Injection on ath11k is not something AirDriver can vouch for, so it is flagged unknown rather than promised. Mostly an AP/enterprise card rather than a laptop module.",
+      "adapters": ["QCN9074 M.2 modules", "Compex WLE3000H5"],
+      "usb_ids": ["17cb:1104"],
+      "kernel_native": {"module": "ath11k_pci", "min_kernel": "5.13", "recommended_kernel": "6.1", "firmware": "ath11k firmware (linux-firmware)"},
+      "drivers": [
+        {"method": "kernel_native", "module": "ath11k_pci", "priority": 1, "firmware_pkg": "firmware-atheros"}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "ath12k_wcn7850",
+      "name": "Qualcomm WCN7850 (ath12k, Wi-Fi 7)",
+      "vendor": "Qualcomm",
+      "wifi": "WiFi 7 (802.11be)",
+      "band": "Tri-band BE (2.4 + 5 + 6 GHz)",
+      "monitor_mode": true,
+      "injection": false,
+      "injection_quality": "unknown",
+      "notes": "The Wi-Fi 7 module in many 2024+ laptops. The kernel marks it supports_monitor = true, so unlike the QCA6390/WCN6855 generation it can actually sniff. Injection is unproven on ath12k and is flagged unknown rather than claimed. Needs a recent kernel and current linux-firmware.",
+      "adapters": ["Qualcomm FastConnect 7800", "WCN7850 M.2 modules"],
+      "usb_ids": ["17cb:1107"],
+      "kernel_native": {"module": "ath12k_pci", "min_kernel": "6.3", "recommended_kernel": "6.9", "firmware": "ath12k firmware (linux-firmware)"},
+      "drivers": [
+        {"method": "kernel_native", "module": "ath12k_pci", "priority": 1, "firmware_pkg": "firmware-atheros"}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "ath12k_qcn9274",
+      "name": "Qualcomm QCN9274 / QCC2072 (ath12k)",
+      "vendor": "Qualcomm",
+      "wifi": "WiFi 7 (802.11be)",
+      "band": "Tri-band BE (2.4 + 5 + 6 GHz)",
+      "monitor_mode": true,
+      "injection": false,
+      "injection_quality": "unknown",
+      "notes": "AP-class Wi-Fi 7 silicon. supports_monitor = true on hw2.0, but false on the earlier hw1.0 revision, which shares this PCI id — AirDriver cannot tell the two revisions apart from the id alone, so verify before relying on capture. Injection unproven, flagged unknown.",
+      "adapters": ["QCN9274 reference boards", "QCC2072 modules"],
+      "usb_ids": ["17cb:1109", "17cb:1112"],
+      "kernel_native": {"module": "ath12k_pci", "min_kernel": "6.6", "recommended_kernel": "6.12", "firmware": "ath12k firmware (linux-firmware)"},
+      "drivers": [
+        {"method": "kernel_native", "module": "ath12k_pci", "priority": 1, "firmware_pkg": "firmware-atheros"}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "ath5k_pci",
+      "name": "Atheros AR5xxx (legacy PCI/PCIe, ath5k)",
+      "vendor": "Atheros",
+      "wifi": "WiFi 4 (802.11a/b/g)",
+      "band": "Dual-band a/b/g (2.4 + 5 GHz, model dependent)",
+      "monitor_mode": true,
+      "injection": true,
+      "injection_quality": "good",
+      "notes": "The pre-ath9k Atheros generation, and still an excellent sniffer: ath5k is in-kernel, needs no firmware blob, and inherits mac80211's monitor support. Slow by modern standards (802.11a/b/g only) but rock-solid for capture, and the cards cost almost nothing second-hand. Covers AR5210/5211/5212/5213/2413/5413/2417.",
+      "adapters": ["Atheros AR5212 miniPCI", "3Com 3CRDAG675", "IBM miniPCI AR5212", "Ubiquiti SR2/SR5"],
+      "usb_ids": [
+        "10b7:0013", "168c:0007", "168c:0011", "168c:0012", "168c:0013", "168c:0014",
+        "168c:0015", "168c:0016", "168c:0017", "168c:0018", "168c:0019", "168c:001a",
+        "168c:001b", "168c:001c", "168c:001d", "168c:0207", "168c:1014", "168c:ff16",
+        "168c:ff1a", "168c:ff1b", "a727:0013"
+      ],
+      "kernel_native": {"module": "ath5k", "min_kernel": "2.6.25", "recommended_kernel": "5.10"},
+      "drivers": [
+        {"method": "kernel_native", "module": "ath5k", "priority": 1}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "zd1211rw",
+      "name": "ZyDAS ZD1211 / ZD1211B",
+      "vendor": "ZyDAS / Atheros",
+      "wifi": "WiFi 4 (802.11b/g)",
+      "band": "Single-band 2.4 GHz",
+      "monitor_mode": true,
+      "injection": true,
+      "injection_quality": "fair",
+      "notes": "An early-2000s USB chipset rebadged by dozens of vendors. In-kernel zd1211rw is a mac80211 driver, so monitor mode is available and injection works, but the radio is 802.11g only and slow. Worth keeping in a drawer, not worth buying new. Needs the zd1211 firmware from linux-firmware.",
+      "adapters": ["ZyXEL ZyAIR G-220", "3Com 3CRUSB10075", "Sitecom WL-113", "Trendnet TEW-424UB"],
+      "usb_ids": [
+        "0053:5301", "0105:145f", "0409:0248", "0411:00da", "0471:1236", "0471:1237",
+        "050d:705c", "054c:0257", "0586:3401", "0586:3402", "0586:3407", "0586:3409",
+        "0586:340a", "0586:340f", "0586:3410", "0586:3412", "0586:3413", "079b:004a",
+        "079b:0062", "07b8:6001", "07fa:1196", "083a:4505", "083a:e501", "083a:e503",
+        "083a:e506", "0ace:1211", "0ace:1215", "0ace:2011", "0ace:20ff", "0ace:a211",
+        "0ace:b215", "0b05:170c", "0b05:171b", "0b3b:1630", "0b3b:5630", "0baf:0121",
+        "0cde:001a", "0df6:0036", "0df6:9071", "0df6:9075", "126f:a006", "129b:1666",
+        "129b:1667", "13b1:001e", "13b1:0024", "1435:0711", "14ea:ab10", "14ea:ab13",
+        "157e:300a", "157e:300b", "157e:300d", "157e:3204", "157e:3207", "1582:6003",
+        "1740:2000", "2019:5303", "2019:ed01", "6891:a727"
+      ],
+      "kernel_native": {"module": "zd1211rw", "min_kernel": "2.6.18", "recommended_kernel": "5.10", "firmware": "zd1211/zd1211_ub"},
+      "drivers": [
+        {"method": "kernel_native", "module": "zd1211rw", "priority": 1, "firmware_pkg": "firmware-zd1211"}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "ar5523",
+      "name": "Atheros AR5523 (USB)",
+      "vendor": "Atheros",
+      "wifi": "WiFi 4 (802.11a/b/g)",
+      "band": "Dual-band a/b/g (2.4 + 5 GHz, model dependent)",
+      "monitor_mode": true,
+      "injection": false,
+      "injection_quality": "unknown",
+      "notes": "Atheros' USB part from the AR5xxx era. In-kernel ar5523 is a mac80211 driver so monitor mode comes for free, but the driver advertises only station mode itself and injection is not something AirDriver can vouch for — flagged unknown rather than promised. Needs the ar5523 firmware blob; the device enumerates under a second 'pre-firmware' id until that loads, and both ids are listed here.",
+      "adapters": ["Netgear WG111T", "D-Link DWL-G132", "Netgear WPN111"],
+      "usb_ids": [
+        "07d1:3a07", "07d1:3a08", "083a:4506", "083a:4507", "0846:4250", "0846:4251",
+        "0846:4300", "0846:4301", "0846:5f00", "0846:5f01", "0cde:0012", "0cde:0013",
+        "0cf3:0001", "0cf3:0002", "0cf3:0003", "0cf3:0004", "0cf3:0005", "0cf3:0006",
+        "0d8e:7801", "0d8e:7802", "0d8e:7803", "0d8e:7811", "0d8e:7812", "129b:160b",
+        "129b:160c", "1385:4250", "1385:4251", "1385:5f00", "1385:5f01", "1385:5f02",
+        "1385:5f03", "1435:0826", "1435:0827", "1435:0828", "1435:0829", "157e:3006",
+        "157e:3007", "157e:3205", "157e:3206", "168c:0001", "168c:0002", "1690:0710",
+        "1690:0711", "1690:0712", "1690:0713", "16ab:7801", "16ab:7802", "16ab:7811",
+        "16ab:7812", "2001:3a00", "2001:3a01", "2001:3a02", "2001:3a03", "2001:3a04",
+        "2001:3a05"
+      ],
+      "kernel_native": {"module": "ar5523", "min_kernel": "3.4", "recommended_kernel": "5.10", "firmware": "ar5523.bin"},
+      "drivers": [
+        {"method": "kernel_native", "module": "ar5523", "priority": 1, "firmware_pkg": "firmware-atheros"}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "rt73usb",
+      "name": "Ralink RT2501USB / RT73",
+      "vendor": "Ralink",
+      "wifi": "WiFi 4 (802.11b/g)",
+      "band": "Single-band 2.4 GHz",
+      "monitor_mode": true,
+      "injection": true,
+      "injection_quality": "good",
+      "notes": "The classic mid-2000s Ralink USB part and one of the original reliable injection chipsets — rt73usb is in-kernel rt2x00, so monitor mode and injection both work. 802.11g only, so it is slow, but it still does the job and turns up cheap. Rebadged by nearly every vendor of the era.",
+      "adapters": ["ASUS", "Belkin", "Buffalo", "D-Link", "Conceptronic", "Linksys", "AboCom"],
+      "usb_ids": [
+        "0411:00d8", "0411:00d9", "0411:00e6", "0411:00f4", "0411:0116", "0411:0119",
+        "0411:0137", "0471:200a", "04bb:093d", "04e8:4471", "050d:705a", "050d:905b",
+        "050d:905c", "0586:3415", "06f8:e002", "06f8:e010", "06f8:e020", "0769:31f3",
+        "07aa:002e", "07b8:b21b", "07b8:b21c", "07b8:b21d", "07b8:b21e", "07b8:b21f",
+        "07d1:3c03", "07d1:3c04", "07d1:3c06", "07d1:3c07", "0812:3101", "08dd:0120",
+        "0b05:1723", "0b05:1724", "0cde:001c", "0db0:4600", "0db0:6874", "0db0:6877",
+        "0db0:a861", "0db0:a874", "0df6:0024", "0df6:0027", "0df6:002f", "0df6:90ac",
+        "0df6:9712", "0eb0:9021", "1044:8008", "1044:800a", "1371:9022", "1371:9032",
+        "13b1:0020", "13b1:0023", "13b1:0028", "1472:0009", "148f:2573", "148f:2671",
+        "148f:9021", "14b2:3c10", "14b2:3c22", "15a9:0004", "1631:c019", "1690:0722",
+        "1740:3701", "1740:7100", "178d:02be", "18c5:0002", "18e8:6196", "18e8:6229",
+        "18e8:6238", "1b75:7318", "2019:ab01", "2019:ab50", "6933:5001", "7167:3840",
+        "7392:7318", "7392:7618"
+      ],
+      "kernel_native": {"module": "rt73usb", "min_kernel": "2.6.24", "recommended_kernel": "5.10", "firmware": "rt73.bin"},
+      "drivers": [
+        {"method": "kernel_native", "module": "rt73usb", "priority": 1, "firmware_pkg": "firmware-ralink"}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "rt2500usb",
+      "name": "Ralink RT2500USB (RT2570)",
+      "vendor": "Ralink",
+      "wifi": "WiFi 4 (802.11b/g)",
+      "band": "Single-band 2.4 GHz",
+      "monitor_mode": true,
+      "injection": true,
+      "injection_quality": "fair",
+      "notes": "The generation before rt73usb. In-kernel rt2x00, so monitor mode and injection are available, but it is 802.11b/g, single-band and genuinely old — expect lower rates and less stability than rt73usb. Listed so an ancient dongle is recognised rather than reported as unknown hardware.",
+      "adapters": ["ASUS", "Belkin", "Cisco Systems", "D-Link", "Gigabyte", "MSI", "SMC", "Sagem"],
+      "usb_ids": [
+        "0411:005e", "0411:0066", "0411:0067", "0411:008b", "0411:0097", "050d:7051",
+        "0681:3c06", "06f8:e000", "0769:11f3", "079b:004b", "0b05:1706", "0b05:1707",
+        "0db0:6861", "0db0:6865", "0db0:6869", "0eb0:9020", "0f88:3012", "1044:8001",
+        "1044:8007", "114b:0110", "13b1:000d", "13b1:0011", "13b1:001a", "148f:1706",
+        "148f:2570", "148f:9020", "14b2:3c02", "2001:3c00", "5a57:0260"
+      ],
+      "kernel_native": {"module": "rt2500usb", "min_kernel": "2.6.24", "recommended_kernel": "5.10"},
+      "drivers": [
+        {"method": "kernel_native", "module": "rt2500usb", "priority": 1}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "p54usb",
+      "name": "Intersil/Conexant Prism54 USB (p54usb)",
+      "vendor": "Intersil / Conexant",
+      "wifi": "WiFi 4 (802.11b/g)",
+      "band": "Single-band 2.4 GHz",
+      "monitor_mode": true,
+      "injection": true,
+      "injection_quality": "fair",
+      "notes": "The USB half of the Prism54 family. In-kernel p54usb is mac80211, so monitor mode is available and injection works, though the hardware is 802.11g-era and the firmware is fussy. Needs isl38xx firmware. Included mostly so these very common old dongles identify correctly instead of reading as unknown.",
+      "adapters": [
+        "3COM 3CRWE254G72", "Belkin F5D7050 ver 1000", "D-Link DWL-G122", "Corega CG-WLUSB2GT",
+        "Dell WLA3310", "Netgear WG111 v2"
+      ],
+      "usb_ids": [
+        "0411:0050", "045e:00c2", "0471:1230", "0506:0a11", "0572:2000", "0572:2002",
+        "0675:0530", "06a9:000e", "06b9:0120", "06b9:0121", "0707:ee06", "07aa:001c",
+        "07aa:0020", "0803:4310", "083a:4501", "083a:4502", "083a:4521", "083a:4531",
+        "083a:5501", "083a:c501", "083a:f503", "0846:4200", "0846:4210", "0846:4220",
+        "0846:4240", "0915:2000", "0915:2002", "09aa:1000", "0baf:0118", "0bf8:1007",
+        "0bf8:1009", "0cde:0006", "0cde:0008", "0cde:0015", "0d8e:3762", "0db0:6826",
+        "107b:55f2", "124a:4023", "124a:4025", "124a:4026", "1260:ee22", "13b1:000a",
+        "13b1:000c", "1413:5400", "1435:0210", "1435:0427", "15a9:0002", "1630:0005",
+        "1668:1050", "1740:1000", "182d:096b", "1915:2234", "1915:2235", "2001:3701",
+        "2001:3703", "2001:3704", "2001:3705", "2001:3762", "413c:5513", "413c:8102",
+        "413c:8104", "5041:2234", "5041:2235"
+      ],
+      "kernel_native": {"module": "p54usb", "min_kernel": "2.6.24", "recommended_kernel": "5.10", "firmware": "isl3886usb / isl3887usb"},
+      "drivers": [
+        {"method": "kernel_native", "module": "p54usb", "priority": 1, "firmware_pkg": "firmware-linux-nonfree"}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "brcmfmac",
+      "name": "Broadcom FullMAC (brcmfmac — PCIe + USB)",
+      "vendor": "Broadcom / Cypress",
+      "wifi": "WiFi 5/6 (802.11ac / ax)",
+      "band": "Dual-band (model dependent)",
+      "monitor_mode": false,
+      "injection": false,
+      "injection_quality": "poor",
+      "notes": "The open in-kernel Broadcom driver — and, like the proprietary wl driver, it will not sniff. brcmfmac is FullMAC: the MAC lives in firmware, so it never goes through mac80211 and only advertises monitor mode when the firmware reports a monitor feature flag, which consumer firmware does not. This is the chip in Raspberry Pi 3/4/5 and many laptops and Macs. It is listed so AirDriver identifies it and tells you the truth up front, rather than leaving you to find out with airmon-ng. Use an external adapter for capture or injection.",
+      "adapters": [
+        "Raspberry Pi 3/4/5 (BCM43430/43455)", "MacBook BCM4364", "Dell BCM4356",
+        "Cypress CYW43012"
+      ],
+      "usb_ids": [
+        "04b4:0bdc", "04b4:bd29", "0a5c:0bdc", "0a5c:bd17", "0a5c:bd1e", "0a5c:bd1f",
+        "0a5c:bd27", "13b1:0039", "14e4:4354", "14e4:4355", "14e4:43a3", "14e4:43c3",
+        "14e4:43c4", "14e4:43c5", "14e4:43ca", "14e4:43cb", "14e4:43cc", "14e4:43d3",
+        "14e4:43d9", "14e4:43dc", "14e4:43e9", "14e4:43ec", "14e4:43ef", "14e4:440d",
+        "14e4:4415", "14e4:4425", "14e4:4433", "14e4:4464", "14e4:4488", "14e4:449d",
+        "14e4:aa31"
+      ],
+      "kernel_native": {"module": "brcmfmac", "min_kernel": "3.9", "recommended_kernel": "5.10", "firmware": "brcmfmac firmware (linux-firmware)"},
+      "drivers": [
+        {"method": "kernel_native", "module": "brcmfmac", "priority": 1, "firmware_pkg": "firmware-brcm80211"}
+      ],
+      "blacklist": []
     }
   ]
 }

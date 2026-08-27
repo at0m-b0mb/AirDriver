@@ -35,7 +35,7 @@ class DataPath(unittest.TestCase):
         mod.resources = Boom()
         try:
             self.assertTrue(data_path("chipsets.json").is_file())
-            self.assertGreaterEqual(len(ChipsetDB.load()), 29)
+            self.assertGreaterEqual(len(ChipsetDB.load()), 52)
         finally:
             mod.resources = real
 
@@ -46,8 +46,8 @@ class DatabaseIntegrity(unittest.TestCase):
         cls.db = ChipsetDB.load()
 
     def test_loads_and_is_nonempty(self):
-        self.assertGreaterEqual(len(self.db), 29)
-        self.assertGreaterEqual(self.db.usb_id_count(), 200)
+        self.assertGreaterEqual(len(self.db), 52)
+        self.assertGreaterEqual(self.db.usb_id_count(), 1258)
 
     def test_no_problems(self):
         problems = self.db.problems()
@@ -105,3 +105,60 @@ class KnownLookups(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class EvidenceBackedCapabilities(unittest.TestCase):
+    """Capability flags are the promise this project makes, so the ones derived
+    from the kernel's own source are pinned here. If someone 'helpfully' flips
+    one to look better on paper, the suite says no."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.db = ChipsetDB.load()
+
+    def test_qca6390_wcn6855_cannot_sniff(self):
+        """ath11k sets hw_params.supports_monitor = false for these and then
+        clears NL80211_IFTYPE_MONITOR at registration, so claiming monitor mode
+        here would send people chasing an airmon-ng failure that cannot be fixed."""
+        c = self.db.get("ath11k_qca6390")
+        self.assertIsNotNone(c)
+        self.assertFalse(c.monitor_mode)
+        self.assertFalse(c.injection)
+
+    def test_wcn7850_can_sniff(self):
+        """The same table sets supports_monitor = true for WCN7850 — the flag has
+        to distinguish it from its QCA6390 sibling, or the entry is just noise."""
+        c = self.db.get("ath12k_wcn7850")
+        self.assertIsNotNone(c)
+        self.assertTrue(c.monitor_mode)
+
+    def test_fullmac_broadcom_never_claims_monitor(self):
+        """brcmfmac is FullMAC: it never goes through mac80211 and only offers
+        monitor when firmware reports the feature, which consumer firmware doesn't."""
+        for cid in ("brcmfmac", "broadcom_sta"):
+            with self.subTest(chipset=cid):
+                c = self.db.get(cid)
+                self.assertIsNotNone(c)
+                self.assertFalse(c.monitor_mode)
+                self.assertFalse(c.injection)
+
+    def test_injection_implies_monitor(self):
+        """You cannot inject on a card that will not go into monitor mode."""
+        for c in self.db.all():
+            if c.injection:
+                with self.subTest(chipset=c.id):
+                    self.assertTrue(c.monitor_mode)
+
+    def test_quality_matches_the_declared_scale(self):
+        scale = set(self.db.meta["injection_quality_scale"])
+        for c in self.db.all():
+            with self.subTest(chipset=c.id):
+                self.assertIn(c.injection_quality, scale)
+
+    def test_ambiguous_ids_are_omitted_not_guessed(self):
+        """050d:7050 and 0707:ee13 are each claimed by more than one kernel
+        driver, so the chip cannot be known from the id. Better an 'unknown
+        adapter' prompt than confidently installing the wrong driver."""
+        for uid in ("050d:7050", "0707:ee13"):
+            with self.subTest(usb_id=uid):
+                self.assertIsNone(self.db.match_usb(uid))
