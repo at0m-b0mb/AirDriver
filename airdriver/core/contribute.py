@@ -13,12 +13,10 @@ details about their machine.
 from __future__ import annotations
 
 import os
-import re
 import shutil
 import subprocess
 import urllib.parse
 from dataclasses import dataclass
-from typing import Optional
 
 from . import detector
 from .chipset_db import ChipsetDB

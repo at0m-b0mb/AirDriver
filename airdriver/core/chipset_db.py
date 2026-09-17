@@ -8,10 +8,35 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
 from typing import Optional
+
+# --------------------------------------------------------------------------- #
+# What a database value is allowed to contain                                 #
+# --------------------------------------------------------------------------- #
+# These fields are interpolated into commands that run as root, so they are
+# whitelisted by shape rather than scanned for "bad" characters — a blocklist
+# always misses something. Kept deliberately tight: real kernel modules, Debian
+# package names and driver repos all fit comfortably inside them.
+SAFE_MODULE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+# Debian policy: lowercase start, then alphanumerics and + - . (we also tolerate
+# uppercase, which some third-party packages use).
+SAFE_PACKAGE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9+._-]{0,96}$")
+# https only. git's `ext::` transport runs an arbitrary command, and `git://`
+# and local paths are not something a driver source should ever need.
+SAFE_REPO = re.compile(r"^https://[A-Za-z0-9._~\-]+(?::\d+)?(?:/[A-Za-z0-9._~\-]+)*/?$")
+
+
+def _safe_rel_path(p: str) -> bool:
+    """A bundled-driver path: relative, under ``data/``, no traversal."""
+    if not p or p.startswith("/") or "\\" in p:
+        return False
+    parts = p.split("/")
+    if any(seg in ("", ".", "..") for seg in parts):
+        return False
+    return all(re.fullmatch(r"[A-Za-z0-9._-]{1,64}", seg) for seg in parts)
 
 
 def data_path(*parts: str) -> Path:
@@ -154,6 +179,37 @@ class ChipsetDB:
         valid_methods = {"kernel_native", "apt", "dkms_git", "offline"}
         _id_re = re.compile(r"^[0-9a-f]{4}:[0-9a-f]{4}$")
         out: list[str] = []
+
+        # --- the database is executable content ----------------------------
+        # Every one of these values ends up inside a command AirDriver runs as
+        # root, so the file is not merely data: a chipset entry is a small
+        # program. Contributions arrive by pull request, which makes this the
+        # supply-chain gate — `airdriver db --check` runs in CI, so a value
+        # carrying shell metacharacters is rejected at review time rather than
+        # executed on a user's machine. (Call sites also shlex-quote these, so a
+        # hand-edited database still can't break out; this stops it earlier.)
+        for c in self._chipsets:
+            for m in c.blacklist:
+                if not SAFE_MODULE.match(m or ""):
+                    out.append(f"{c.id}: unsafe blacklist module {m!r} "
+                               "(want letters, digits, '_' or '-')")
+            kn = c.kernel_native
+            if kn is not None and not SAFE_MODULE.match(kn.module or ""):
+                out.append(f"{c.id}: unsafe kernel_native module {kn.module!r}")
+            for d in c.drivers:
+                if d.module and not SAFE_MODULE.match(d.module):
+                    out.append(f"{c.id}: unsafe driver module {d.module!r}")
+                if d.package and not SAFE_PACKAGE.match(d.package):
+                    out.append(f"{c.id}: unsafe apt package {d.package!r}")
+                if d.firmware_pkg and not SAFE_PACKAGE.match(d.firmware_pkg):
+                    out.append(f"{c.id}: unsafe firmware package {d.firmware_pkg!r}")
+                if d.repo and not SAFE_REPO.match(d.repo):
+                    # git's ext:: transport executes a command, so the scheme is
+                    # pinned to https rather than merely scanned for metacharacters.
+                    out.append(f"{c.id}: unsafe repo {d.repo!r} (want an https:// URL)")
+                if d.path and not _safe_rel_path(d.path):
+                    out.append(f"{c.id}: unsafe offline path {d.path!r} "
+                               "(want a relative path under data/, no '..')")
 
         # Unique chipset ids.
         seen_cid: dict[str, int] = {}

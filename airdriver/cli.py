@@ -29,7 +29,7 @@ from . import __version__, __codename__
 from .core import (detector, diagnose, manage, monitor as mon, report as rep,
                    setup as setup_flow, system, verify)
 from .core.chipset_db import ChipsetDB
-from .core.installer import Executor, build_plan, build_remove_plan, select_driver
+from .core.installer import Executor, build_plan, build_remove_plan
 
 # --- tiny ANSI helpers (no dependency) ------------------------------------- #
 _USE_COLOR = sys.stdout.isatty()
@@ -131,8 +131,13 @@ def cmd_doctor(args, db: ChipsetDB) -> int:
         ("Secure Boot", info.secure_boot),
     ]
     for k, v in rows:
+        # "Internet: no" and "Root: no" are states, not faults — you can prepare
+        # an offline install, and you can run the read-only commands unprivileged.
+        # "Secure Boot: on" *is* a fault worth colouring: it is the reason a
+        # freshly built DKMS module silently refuses to load. (This flag used to
+        # be computed and then ignored, which painted Secure Boot green.)
         ok = v not in ("MISSING", "no", "on") or k in ("Internet", "Root")
-        colour = green if v not in ("MISSING",) else red
+        colour = green if ok else (red if v == "MISSING" else yellow)
         print(f"  {k:<16} {colour(str(v))}")
     blockers = info.blockers()
     if blockers:
@@ -432,7 +437,6 @@ def cmd_status(args, db: ChipsetDB) -> int:
     st = manage.status(db, info)
     if getattr(args, "json", False):
         import json
-        from dataclasses import asdict
         print(json.dumps({
             "kernel": st.kernel, "other_kernels": st.other_kernels,
             "secure_boot": st.secure_boot, "signing_key": st.signing_key,
@@ -545,7 +549,11 @@ def cmd_modeswitch(args, db: ChipsetDB) -> int:
             print(f"  {yellow(uid)}  {desc}")
         target = found[0][0]
         print(dim(f"\nSwitching the first one ({target})…\n"))
-    plan = manage.build_modeswitch_plan(target)
+    try:
+        plan = manage.build_modeswitch_plan(target)
+    except ValueError as exc:
+        print(red(str(exc)))
+        return 1
     print(plan.describe())
     if args.dry_run:
         print(yellow("\n(dry run — nothing executed)"))

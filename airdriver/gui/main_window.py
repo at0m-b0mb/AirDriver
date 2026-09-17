@@ -14,11 +14,11 @@ Long operations (scan, install) run on worker threads so the UI never freezes.
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, QThread, QObject, Signal, QSize, QUrl, QRectF, QTimer
-from PySide6.QtGui import QFont, QDesktopServices, QPixmap, QPainter, QPen, QColor, QIcon
+from PySide6.QtGui import QDesktopServices, QPixmap, QPainter, QPen, QColor, QIcon
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDialog, QFrame, QHBoxLayout, QLabel,
     QLineEdit, QMainWindow, QMessageBox, QPlainTextEdit, QPushButton, QScrollArea,
-    QSizePolicy, QTextBrowser, QVBoxLayout, QWidget,
+    QTextBrowser, QVBoxLayout, QWidget,
 )
 
 from .. import __version__, __codename__

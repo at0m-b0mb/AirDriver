@@ -13,7 +13,6 @@ import shutil
 import socket
 import subprocess
 from dataclasses import dataclass, field
-from typing import Optional
 
 
 def _run(cmd: list[str], timeout: int = 8) -> tuple[int, str]:

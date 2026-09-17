@@ -20,7 +20,7 @@ from typing import Optional
 
 from . import detector
 from .chipset_db import Chipset
-from .modules import is_loaded, loaded_modules, module_available
+from .modules import loaded_modules, module_available
 from .system import SystemInfo
 
 

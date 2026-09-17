@@ -28,7 +28,7 @@ from typing import Optional
 
 from .chipset_db import Chipset, ChipsetDB
 from .installer import InstallPlan, Step
-from .modules import loaded_modules, module_available
+from .modules import loaded_modules
 from .system import SystemInfo
 
 # Where AirDriver keeps the Secure Boot signing key it generates.
@@ -241,10 +241,13 @@ def build_rebuild_plan(info: SystemInfo, only: Optional[str] = None) -> InstallP
             "installed — reboot into the newest kernel first, then rebuild.")
 
     if only:
+        # `only` comes from the command line, so it is quoted rather than pasted
+        # straight into a root shell.
+        q = shlex.quote(only)
         plan.steps.append(Step(
             title=f"Rebuild and install '{only}' for {info.kernel_release}",
-            shell=(f'sudo dkms build -m {only} -k "$(uname -r)" --force && '
-                   f'sudo dkms install -m {only} -k "$(uname -r)" --force'),
+            shell=(f'sudo dkms build -m {q} -k "$(uname -r)" --force && '
+                   f'sudo dkms install -m {q} -k "$(uname -r)" --force'),
             privileged=True))
     else:
         plan.steps.append(Step(
@@ -439,7 +442,14 @@ def storage_mode_devices(adapters) -> list[tuple[str, str]]:
 
 
 def build_modeswitch_plan(usb_id: str) -> InstallPlan:
-    """Eject the fake CD-ROM so the device re-enumerates as a Wi-Fi adapter."""
+    """Eject the fake CD-ROM so the device re-enumerates as a Wi-Fi adapter.
+
+    ``usb_id`` may come straight from the command line, so it is validated to a
+    literal ``vid:pid`` before being put anywhere near a root shell.
+    """
+    if not re.fullmatch(r"[0-9A-Fa-f]{4}:[0-9A-Fa-f]{4}", (usb_id or "").strip()):
+        raise ValueError(f"not a usb id: {usb_id!r} (expected something like 0bda:1a2b)")
+    usb_id = usb_id.strip().lower()
     vid, _, pid = usb_id.partition(":")
     plan = InstallPlan(adapter=None, chipset=None, method="modeswitch",
                        summary=f"Switch {usb_id} out of driver-CD (storage) mode",

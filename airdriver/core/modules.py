@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import os
+import re
 import subprocess
 
 BLACKLIST_FILE = "/etc/modprobe.d/airdriver-blacklist.conf"
@@ -35,9 +35,18 @@ def module_available(module: str) -> bool:
         return False
 
 
+#: A kernel module name, as modprobe.d will accept it. Anything else is dropped
+#: rather than written: this file is parsed by the kernel's module loader, so a
+#: value carrying a newline could smuggle extra directives into it.
+_SAFE_MODULE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
 def blacklist_snippet(modules: list[str]) -> str:
     lines = ["# Written by AirDriver — prevents in-kernel modules from grabbing",
              "# an adapter that should use the installed out-of-tree driver.\n"]
     for m in modules:
-        lines.append(f"blacklist {m}")
+        if _SAFE_MODULE.match(m or ""):
+            lines.append(f"blacklist {m}")
+        else:
+            lines.append(f"# skipped unsafe module name: {m!r}")
     return "\n".join(lines) + "\n"

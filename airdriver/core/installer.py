@@ -78,10 +78,18 @@ def offline_source_dir(option: DriverOption) -> Optional[Path]:
     try:
         # option.path is like "drivers/8812au-20210820" (relative to data/).
         candidate = data_path(*option.path.split("/"))
-    except (ModuleNotFoundError, AttributeError, TypeError):
+        # Containment: this directory is copied into a build tree and compiled
+        # as root, so a database entry must not be able to point it somewhere
+        # else (".." or an absolute path). Resolve and confirm it really sits
+        # under data/ before handing it to the installer.
+        root = data_path().resolve()
+        resolved = candidate.resolve()
+        if root != resolved and root not in resolved.parents:
+            return None
+    except (ModuleNotFoundError, AttributeError, TypeError, OSError, ValueError):
         return None
-    if candidate.is_dir() and any(candidate.iterdir()):
-        return candidate
+    if resolved.is_dir() and any(resolved.iterdir()):
+        return resolved
     return None
 
 
@@ -253,7 +261,7 @@ def _apt_step(chip: Chipset, option: DriverOption, sysinfo: SystemInfo) -> Step:
     fallback = _source_fallback(chip, sysinfo)
     if not fallback:
         return Step(title=f"Install apt package '{pkg}'",
-                    shell=f"sudo apt-get install -y {pkg}", privileged=True)
+                    shell=f"sudo apt-get install -y {shlex.quote(pkg)}", privileged=True)
     fb_opt, fetch = fallback
     where = fb_opt.repo or fb_opt.path or "bundled source"
     build = _build_script(fetch)
@@ -299,7 +307,8 @@ def build_plan(adapter: Adapter, sysinfo: SystemInfo, *,
             if sysinfo.has_internet:
                 steps.append(Step(
                     title=f"Ensure firmware blob '{kn.firmware}' is installed",
-                    shell=f"sudo apt-get install -y {fw_pkg}", privileged=True, optional=True))
+                    shell=f"sudo apt-get install -y {shlex.quote(fw_pkg)}",
+                    privileged=True, optional=True))
             else:
                 plan.warnings.append(
                     f"This chip needs firmware '{kn.firmware}' ({fw_pkg}); no internet "
@@ -391,7 +400,7 @@ def _append_conflict_and_load(plan: InstallPlan, chip: Chipset, module: str) -> 
             content=blacklist_snippet(list(chip.blacklist)), privileged=True))
         for m in chip.blacklist:
             plan.steps.append(Step(title=f"Unload conflicting module '{m}'",
-                                   shell=f"sudo modprobe -r {m} 2>/dev/null || true",
+                                   shell=f"sudo modprobe -r {shlex.quote(m)} 2>/dev/null || true",
                                    privileged=True, optional=True))
     plan.steps.append(Step(title="Rebuild module dependency map",
                            shell="sudo depmod -a", privileged=True, optional=True))
@@ -400,7 +409,7 @@ def _append_conflict_and_load(plan: InstallPlan, chip: Chipset, module: str) -> 
             title=f"Load driver module '{module}'",
             # Show modprobe's error if it fails (Secure Boot, missing firmware,
             # conflict…) instead of hiding it — verification reports the verdict.
-            shell=f"sudo modprobe {module} || echo \"[airdriver] modprobe {module} "
+            shell=f"sudo modprobe {shlex.quote(module)} || echo \"[airdriver] modprobe {module} "
                   f"failed — see the verification report below for why\"",
             privileged=True, optional=True))
 
@@ -465,13 +474,14 @@ def build_remove_plan(chip: Chipset, sysinfo: SystemInfo) -> InstallPlan:
         for m in oot_modules:
             plan.steps.append(Step(
                 title=f"Unload module '{m}' if loaded",
-                shell=f"sudo modprobe -r {m} 2>/dev/null || true",
+                shell=f"sudo modprobe -r {shlex.quote(m)} 2>/dev/null || true",
                 privileged=True, optional=True))
 
     for pkg in apt_pkgs:
+        q = shlex.quote(pkg)
         plan.steps.append(Step(
             title=f"Remove apt package '{pkg}' (if installed)",
-            shell=f"dpkg -l {pkg} >/dev/null 2>&1 && sudo apt-get remove -y {pkg} || true",
+            shell=f"dpkg -l {q} >/dev/null 2>&1 && sudo apt-get remove -y {q} || true",
             privileged=True, optional=True))
 
     # Installing wrote a modprobe blacklist so the in-kernel driver would keep
@@ -492,7 +502,7 @@ def build_remove_plan(chip: Chipset, sysinfo: SystemInfo) -> InstallPlan:
         for m in chip.blacklist:
             plan.steps.append(Step(
                 title=f"Load the in-kernel module '{m}' again",
-                shell=f"sudo modprobe {m} 2>/dev/null || true",
+                shell=f"sudo modprobe {shlex.quote(m)} 2>/dev/null || true",
                 privileged=True, optional=True))
 
     plan.steps.append(Step(title="Rebuild module dependency map",
