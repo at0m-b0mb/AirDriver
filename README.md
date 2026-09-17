@@ -33,7 +33,14 @@ can really inject.
 curl -fsSL https://raw.githubusercontent.com/at0m-b0mb/AirDriver/main/install.sh | sudo bash
 ```
 
-That installs the dependencies, the GUI, and the `airdriver` command. Then:
+That installs the dependencies, the GUI, and the `airdriver` command. Then **one
+command does the whole job** — plugged in to injection confirmed:
+
+```bash
+sudo airdriver setup     # detect → install → verify → monitor mode → injection test
+```
+
+…or open the GUI and press **Get me ready**, which runs exactly the same thing:
 
 ```bash
 sudo airdriver           # opens the GUI
@@ -83,6 +90,13 @@ them on an air-gapped machine.
 
 ## Features
 
+- ⭐ **One command does the whole job** — `airdriver setup` (or **Get me ready** in the
+  GUI) takes an adapter from *plugged in* to *injection confirmed*: it picks the most
+  capable adapter present, installs the driver, checks it really **bound**, switches on
+  monitor mode and runs the injection self-test — then gives you **one honest verdict**
+  and the exact next step. A chipset that physically cannot inject is told apart from a
+  broken install, and a failed injection test says *"not confirmed here"* rather than
+  blaming your driver, because that test legitimately fails with no AP in range.
 - 🔍 **Auto-detection, straight from the kernel** — USB and PCI devices are read out of
   **sysfs**, not scraped from `lsusb`/`lspci`, so detection is complete on a minimal
   install with no `usbutils`/`pciutils` (they're used when present, only to borrow their
@@ -267,6 +281,10 @@ a built-in quick start and troubleshooter.
 ### CLI
 
 ```bash
+airdriver setup                 # ⭐ the whole job in one command
+airdriver setup --dry-run       # …show what it would do, change nothing
+airdriver setup --no-inject     # driver + monitor mode, skip the injection test
+airdriver setup 0cf3:9271       # set up a specific adapter
 airdriver scan                  # list detected adapters
 airdriver scan --json           # …machine-readable, for scripts
 airdriver doctor                # system readiness (headers, dkms, secure boot…)
@@ -633,7 +651,12 @@ AirDriver/
 - Bootable USB persistence profile
 - AppImage / `.deb` packaging
 
-Recently shipped in **v0.8.0 "Wider Net"**: **12 new chipset families (+400 IDs)** taking
+Recently shipped in **v0.9.0 "One Command"**: **`airdriver setup`** — the whole job in a
+single run (detect → install → verify → monitor mode → injection test) with one honest
+verdict at the end, mirrored by the GUI's **Get me ready** button. Monitor mode is read
+back from sysfs rather than trusted from `airmon-ng`'s exit code, and a chipset that
+cannot inject is never reported as a failed install. 17 new tests (**125** total).
+Before that, **v0.8.0 "Wider Net"**: **12 new chipset families (+400 IDs)** taking
 the database to **52 families / 1258 IDs** — Qualcomm `ath11k`/`ath12k`, Broadcom
 `brcmfmac`, Intel Centrino-N, and the classic `ath5k`/`rt73usb`/`zd1211rw`/`p54usb`
 injection chipsets. Capability flags are now read out of the kernel source rather than

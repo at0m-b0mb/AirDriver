@@ -2,6 +2,50 @@
 
 All notable changes to AirDriver are documented here.
 
+## [0.9.0] — 2026-09-16 · "One Command"
+
+Every capability AirDriver has was already here — `scan`, `install`, `verify`,
+`monitor start`, `monitor test`. Knowing *that sequence* was the last piece of
+expertise the tool still quietly demanded of you. Now there is one command.
+
+### Added — `airdriver setup`
+
+One run takes an adapter from *plugged in* to *injection confirmed*:
+
+1. picks the most pentest-capable adapter present (a USB injector always beats an
+   internal card — internal Wi-Fi essentially never injects),
+2. reports what the hardware can actually do, straight from the database,
+3. installs the driver — or skips when the adapter already works,
+4. verifies the module really **bound to the device**,
+5. enables monitor mode, reading the mode **back from sysfs** rather than trusting
+   `airmon-ng`'s exit code (it also finds the `wlan0` → `wlan0mon` rename),
+6. runs the `aireplay-ng` injection self-test,
+
+and ends with one honest verdict plus the exact next step.
+
+The honesty rules are the point:
+
+* A chipset the database says **cannot inject** is never held to an injection bar
+  it can't clear — it reports "this is the hardware, not the install", instead of
+  blaming a perfectly good driver.
+* A failed injection test says **"not confirmed here"**, because that test
+  legitimately fails with no AP in range.
+* A step that couldn't run (no root, no `aircrack-ng`) says so, and the verdict
+  stays short of "ready" rather than quietly claiming success.
+
+Flags: `--dry-run`, `--no-monitor`, `--no-inject`, and an optional target.
+
+### Added — GUI
+
+**"Get me ready"** is now the single primary button, running the same flow on a
+worker thread with the output streamed live. `Install driver` remains for driving
+the steps yourself.
+
+### Tests
+
+17 new tests (**125 total**) covering adapter ranking, target resolution, every
+verdict branch, and the monitor-interface read-back.
+
 ## [0.8.0] — 2026-08-27 · "Wider Net"
 
 **52 chipset families / 1258 USB+PCI IDs**, up from 40 / 858 — twelve new families, and

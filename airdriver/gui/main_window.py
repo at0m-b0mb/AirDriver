@@ -22,7 +22,8 @@ from PySide6.QtWidgets import (
 )
 
 from .. import __version__, __codename__
-from ..core import detector, monitor as mon, report as rep, system, verify
+from ..core import (detector, monitor as mon, report as rep,
+                    setup as setup_flow, system, verify)
 from ..core.chipset_db import Chipset, ChipsetDB
 from ..core.detector import Adapter
 from ..core.installer import Executor, build_plan, build_remove_plan
@@ -145,6 +146,30 @@ class MonitorWorker(QObject):
         else:
             r = mon.CommandResult(False, "unknown action")
         self.done.emit((self.action, r))
+
+
+class SetupWorker(QObject):
+    """The whole job on one thread: detect → install → verify → monitor → inject.
+
+    It can run for minutes (a DKMS build), so every line is streamed back to the
+    log as it happens rather than arriving in one lump at the end.
+    """
+    line = Signal(str)
+    done = Signal(object)  # setup_flow.Outcome
+
+    def __init__(self, db: ChipsetDB, target, dry_run: bool,
+                 want_monitor: bool = True, want_inject: bool = True):
+        super().__init__()
+        self.db, self.target, self.dry_run = db, target, dry_run
+        self.want_monitor, self.want_inject = want_monitor, want_inject
+
+    def run(self):
+        out = setup_flow.run(self.db, target=self.target,
+                             want_monitor=self.want_monitor,
+                             want_inject=self.want_inject,
+                             dry_run=self.dry_run,
+                             log=lambda s: self.line.emit(s))
+        self.done.emit(out)
 
 
 # --------------------------------------------------------------------------- #
@@ -271,8 +296,8 @@ class MainWindow(QMainWindow):
         f.setObjectName("Footer")
         lay = QHBoxLayout(f)
         lay.setContentsMargins(18, 8, 18, 8)
-        tip = QLabel("Tip: pick an adapter, review the plan, then Install. "
-                     "Use Dry run to preview safely.")
+        tip = QLabel("Tip: pick an adapter and press Get me ready — it installs, verifies, "
+                     "and tests injection. Tick Dry run to preview safely.")
         tip.setObjectName("Dim")
         link = QLabel(f'<a style="color:{T.CYAN};text-decoration:none" '
                       f'href="{REPO_URL}">github.com/at0m-b0mb/AirDriver</a>')
@@ -412,8 +437,17 @@ class MainWindow(QMainWindow):
 
         # Action buttons
         actions = QHBoxLayout()
-        self.btn_install = QPushButton(icons.icon("install", colour="#04130d"), "Install driver")
-        self.btn_install.setObjectName("Primary")
+        # The hero action: the entire job in one press. Everything to its right
+        # is the same work broken into steps, for when you want to drive it
+        # yourself. Only one button is Primary — this one.
+        self.btn_setup = QPushButton(icons.icon("pulse", colour="#04130d"), "Get me ready")
+        self.btn_setup.setObjectName("Primary")
+        self.btn_setup.setIconSize(icons.SIZE)
+        self.btn_setup.setEnabled(False)
+        self.btn_setup.setToolTip("Do the whole job: install the driver, verify it really "
+                                  "bound, enable monitor mode and test injection")
+        self.btn_setup.clicked.connect(self.run_setup)
+        self.btn_install = QPushButton(icons.icon("install"), "Install driver")
         self.btn_install.setIconSize(icons.SIZE)
         self.btn_install.setEnabled(False)
         self.btn_install.clicked.connect(self.install_selected)
@@ -447,6 +481,7 @@ class MainWindow(QMainWindow):
         self.btn_report.clicked.connect(self.export_report)
         # Adapter actions only. The log-related buttons live on the log header
         # row below, so this row can never overflow and clip its labels.
+        actions.addWidget(self.btn_setup)
         actions.addWidget(self.btn_install)
         actions.addWidget(self.btn_plan)
         actions.addWidget(self.btn_verify)
@@ -639,6 +674,7 @@ class MainWindow(QMainWindow):
         self.detail_title.setText(a.title)
         known = a.known
         self.identify_row.setVisible(not known)
+        self.btn_setup.setEnabled(True)
         self.btn_install.setEnabled(True)
         self.btn_plan.setEnabled(True)
         self.btn_verify.setEnabled(True)
@@ -688,6 +724,52 @@ class MainWindow(QMainWindow):
             return
         self.log.clear()
         self.log_line(plan.describe())
+
+    # ---- the one-press path ------------------------------------------------
+    def run_setup(self):
+        """Detect → install → verify → monitor mode → injection test, in one go."""
+        if self._installing:
+            return
+        a = self._resolve_target()
+        if a is None or a.chipset is None:
+            return
+        dry = self.cb_dry.isChecked()
+        if self.sysinfo and not self.sysinfo.is_root and not dry and self.sysinfo.is_linux:
+            box = QMessageBox(self)
+            box.setIcon(QMessageBox.Warning)
+            box.setWindowTitle("Root required")
+            box.setText("Setting up an adapter needs root.")
+            box.setInformativeText(
+                "Installing a driver and switching to monitor mode both need root. "
+                "Relaunch with sudo, or continue — sudo will prompt in the terminal "
+                "you launched from.")
+            box.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
+            if box.exec() == QMessageBox.Cancel:
+                return
+
+        self._installing = True
+        self._verify_after = None          # the flow does its own verification
+        self.log.clear()
+        self._set_busy(True)
+        self.btn_setup.setText("Working…")
+        worker = SetupWorker(self.db, a.usb_id, dry)
+        worker.line.connect(self.log_line)
+        self._start_worker(worker, self._on_setup_done)
+
+    def _on_setup_done(self, out):
+        self._installing = False
+        self._set_busy(False)
+        self.btn_setup.setText("Get me ready")
+        self.log_line(setup_flow.describe(out))
+
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Information if out.ready else QMessageBox.Warning)
+        box.setWindowTitle("Setup")
+        box.setText(out.headline)
+        if out.next_steps:
+            box.setInformativeText("\n".join(f"• {s}" for s in out.next_steps)[:900])
+        box.exec()
+        QTimer.singleShot(0, self.rescan)
 
     def install_selected(self):
         if self._installing:
@@ -821,8 +903,8 @@ class MainWindow(QMainWindow):
             "clipboard.\n\nPaste it wherever you're asking for help.")
 
     def _set_busy(self, busy: bool):
-        for b in (self.btn_install, self.btn_plan, self.btn_rescan, self.btn_verify,
-                  self.btn_remove, self.btn_manage, *self._mon_btns):
+        for b in (self.btn_setup, self.btn_install, self.btn_plan, self.btn_rescan,
+                  self.btn_verify, self.btn_remove, self.btn_manage, *self._mon_btns):
             b.setEnabled(not busy)
         self.btn_install.setText("Installing…" if busy else "Install driver")
 

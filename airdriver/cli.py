@@ -27,7 +27,7 @@ import sys
 
 from . import __version__, __codename__
 from .core import (detector, diagnose, manage, monitor as mon, report as rep,
-                   system, verify)
+                   setup as setup_flow, system, verify)
 from .core.chipset_db import ChipsetDB
 from .core.installer import Executor, build_plan, build_remove_plan, select_driver
 
@@ -555,6 +555,31 @@ def cmd_modeswitch(args, db: ChipsetDB) -> int:
     return 0 if ok else 2
 
 
+def cmd_setup(args, db: ChipsetDB) -> int:
+    """The whole job in one command: detect → install → verify → monitor → inject."""
+    print(BANNER)
+    out = setup_flow.run(
+        db,
+        target=args.target,
+        want_monitor=not args.no_monitor,
+        want_inject=not args.no_inject,
+        dry_run=args.dry_run,
+        log=print,
+    )
+    text = setup_flow.describe(out)
+    # Colour the verdict line without touching the rest of the summary.
+    if out.ready:
+        text = text.replace(out.headline, green(out.headline))
+    elif out.connected:
+        text = text.replace(out.headline, yellow(out.headline))
+    else:
+        text = text.replace(out.headline, red(out.headline))
+    print(text)
+    if out.ready:
+        return 0
+    return 0 if (args.dry_run or out.connected) else 2
+
+
 def cmd_recommend(args, db: ChipsetDB) -> int:
     """Which adapter should I actually use/buy?"""
     picks = manage.recommend(db, band=args.band, need_injection=not args.no_injection)
@@ -696,6 +721,16 @@ def build_parser() -> argparse.ArgumentParser:
     pms.add_argument("target", nargs="?", help="usb id (default: the detected one)")
     pms.add_argument("--dry-run", action="store_true", help="Show the plan, change nothing")
 
+    pse = sub.add_parser("setup", help="Do the whole job: detect, install, verify, "
+                                       "monitor mode, injection test")
+    pse.add_argument("target", nargs="?", help="usb id or chipset id (default: the most "
+                                               "capable adapter plugged in)")
+    pse.add_argument("--dry-run", action="store_true", help="Show the plan, change nothing")
+    pse.add_argument("--no-monitor", action="store_true",
+                     help="Stop after the driver is verified (don't enable monitor mode)")
+    pse.add_argument("--no-inject", action="store_true",
+                     help="Enable monitor mode but skip the injection self-test")
+
     prc = sub.add_parser("recommend", help="Which adapter should I use for pentesting?")
     prc.add_argument("--band", choices=["2.4", "5"], help="Only adapters covering this band")
     prc.add_argument("--no-injection", action="store_true",
@@ -714,7 +749,7 @@ _DISPATCH = {
     "verify": cmd_verify, "remove": cmd_remove, "fix": cmd_fix,
     "diagnose": cmd_diagnose, "status": cmd_status, "rebuild": cmd_rebuild,
     "sign": cmd_sign, "modeswitch": cmd_modeswitch, "recommend": cmd_recommend,
-    "contribute": cmd_contribute,
+    "contribute": cmd_contribute, "setup": cmd_setup,
 }
 
 
