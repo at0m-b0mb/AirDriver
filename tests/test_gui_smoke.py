@@ -95,6 +95,47 @@ def _settle(window=None, ms: int = 2500) -> None:
     app.processEvents()
 
 
+def _fixture_adapters():
+    """Adapters to render, built here rather than taken from a scan.
+
+    The first version of these tests leaned on AirDriver's demo adapters, which
+    exist only where there is no sysfs — so they passed on a Mac and failed on
+    CI, where the scan correctly returns nothing because a GitHub runner has no
+    Wi-Fi. What is under test is the *rendering*, so the input is constructed.
+    """
+    from airdriver.core.chipset_db import ChipsetDB
+    from airdriver.core.detector import Adapter, WirelessInterface
+
+    db = ChipsetDB.load()
+    known = db.get("rtl8812au")
+    native = db.get("ar9271")
+    out = [
+        Adapter(bus="1", device="4", vid="0bda", pid="8812",
+                description="Realtek RTL8812AU 802.11ac WLAN Adapter",
+                chipset=known),
+        Adapter(bus="1", device="6", vid="0cf3", pid="9271",
+                description="Qualcomm Atheros AR9271 802.11n", chipset=native),
+        Adapter(bus="1", device="7", vid="1234", pid="abcd",
+                description="Generic 802.11ac WLAN Adapter (unknown)", chipset=None),
+        # A contested id: in the database's meta, in no chipset.
+        Adapter(bus="1", device="8", vid="148f", pid="760a",
+                description="Ralink 760a", chipset=None),
+    ]
+    out[1].interface = WirelessInterface(name="wlan1", driver="ath9k_htc",
+                                         mode="managed")
+    return db, out
+
+
+def _loaded(window):
+    """A window with adapters rendered into it, whatever the host OS is."""
+    db, adapters = _fixture_adapters()
+    window.sysinfo = window.sysinfo or __import__(
+        "airdriver.core.system", fromlist=["gather"]).gather(check_internet=False)
+    window.adapters = adapters
+    window._render_cards(adapters)
+    return adapters
+
+
 @unittest.skipUnless(HAVE_QT, "needs PySide6")
 class WindowBuilds(unittest.TestCase):
     def setUp(self):
@@ -110,35 +151,84 @@ class WindowBuilds(unittest.TestCase):
     def test_builds_and_scans_without_raising(self):
         with _Collector() as c:
             w = self._window(c)
-            # The initial rescan runs on a worker thread; by now it has landed.
             self.assertIsNotNone(w.sysinfo, "the scan never reported system info")
-            self.assertTrue(w.adapters, "demo mode should produce adapters off-Linux")
             w.close()
             _settle(w)
             c.check(self, "closing the window")
 
     def test_selecting_every_adapter_renders(self):
-        """The details pane is drawn from database values — including an adapter
-        that is deliberately *not* in the database."""
+        """The details pane is drawn from database values — including adapters
+        that are deliberately *not* in the database."""
         with _Collector() as c:
             w = self._window(c)
-            for adapter in w.adapters:
+            adapters = _loaded(w)
+            _settle(w)
+            for adapter in adapters:
                 w.select_adapter(adapter)
                 _settle(w)
+                self.assertTrue(w.verdict_text.text().strip(),
+                                "the verdict strip said nothing")
             c.check(self, "selecting an adapter")
+            w.close()
+            _settle(w)
+
+    def test_a_contested_id_is_explained_not_called_unknown(self):
+        with _Collector() as c:
+            w = self._window(c)
+            adapters = _loaded(w)
+            contested = next(a for a in adapters if a.usb_id == "148f:760a")
+            w.select_adapter(contested)
+            _settle(w)
+            c.check(self, "selecting a contested adapter")
+            self.assertIn("claimed by two", w.detail_body.text())
+            w.close()
+            _settle(w)
+
+    def test_the_most_capable_adapter_is_selected_first(self):
+        """On a box with an internal card and a USB injector, the injector is
+        what you came to set up — and the top card is the one auto-selected."""
+        with _Collector() as c:
+            w = self._window(c)
+            _loaded(w)
+            _settle(w)
+            self.assertIsNotNone(w.selected)
+            self.assertTrue(w.selected.known)
+            self.assertEqual(w.selected.chipset.injection_quality, "excellent",
+                             "a less capable adapter was auto-selected")
+            c.check(self, "ranking the adapters")
             w.close()
             _settle(w)
 
     def test_preview_plan_and_log_colouring(self):
         with _Collector() as c:
             w = self._window(c)
-            known = [a for a in w.adapters if a.known]
-            self.assertTrue(known, "demo data should contain a known adapter")
-            w.select_adapter(known[0])
+            adapters = _loaded(w)
+            w.select_adapter(adapters[0])
             w.preview_plan()
             _settle(w)
             self.assertIn("Plan:", w.log.toPlainText())
+            # The log is appended as HTML for coloured lines; the plain text
+            # must still come back out intact, or "Copy log" is worthless.
+            w.log_line("  ✗ step failed (exit 1) — aborting.")
+            w.log_line("  [airdriver] driver source ready")
+            _settle(w)
+            text = w.log.toPlainText()
+            self.assertIn("✗ step failed (exit 1)", text)
+            self.assertIn("[airdriver] driver source ready", text)
             c.check(self, "previewing the install plan")
+            w.close()
+            _settle(w)
+
+    def test_the_progress_bar_follows_the_step_headers(self):
+        with _Collector() as c:
+            w = self._window(c)
+            w._set_busy(True)
+            w.log_line("[3/9] Install build prerequisites")
+            _settle(w)
+            self.assertEqual((w.progress.value(), w.progress.maximum()), (3, 9))
+            self.assertIn("3 of 9", w.progress_label.text())
+            w._set_busy(False)
+            c.check(self, "driving the progress bar")
             w.close()
             _settle(w)
 
@@ -146,12 +236,12 @@ class WindowBuilds(unittest.TestCase):
         """Each dialog interpolates values into rich text; a bad one throws
         inside a slot and would otherwise go unnoticed."""
         from PySide6.QtCore import QTimer as _T
+        from PySide6.QtWidgets import QDialog
         with _Collector() as c:
             w = self._window(c)
+            _loaded(w)
             for opener in (w.show_chipsets, w.show_help, w.show_manage):
-                # Dialogs are modal: close the top one as soon as it appears.
-                _T.singleShot(60, lambda: [d.accept() for d in w.findChildren(
-                    __import__("PySide6.QtWidgets", fromlist=["QDialog"]).QDialog)])
+                _T.singleShot(60, lambda: [d.accept() for d in w.findChildren(QDialog)])
                 opener()
                 _settle(w)
             c.check(self, "opening a dialog")
@@ -173,7 +263,6 @@ class HostileValuesCannotBecomeMarkup(unittest.TestCase):
         _app()
 
     def test_a_device_name_with_markup_stays_literal(self):
-        from airdriver.core.chipset_db import ChipsetDB
         from airdriver.core.detector import Adapter
         from airdriver.gui.main_window import AdapterCard, MainWindow
         from PySide6.QtCore import Qt
@@ -186,8 +275,7 @@ class HostileValuesCannotBecomeMarkup(unittest.TestCase):
             card = AdapterCard(hostile)
             _settle()
             c.check(self, "rendering a hostile adapter name")
-            labels = card.findChildren(QLabel)
-            shown = [l for l in labels if payload in l.text()]
+            shown = [l for l in card.findChildren(QLabel) if payload in l.text()]
             self.assertTrue(shown, "the device name was not rendered at all")
             for lab in shown:
                 self.assertEqual(lab.textFormat(), Qt.PlainText,
@@ -205,15 +293,15 @@ class HostileValuesCannotBecomeMarkup(unittest.TestCase):
             _settle(w)
 
     def test_database_notes_are_escaped_into_the_details_pane(self):
-        from airdriver.core.chipset_db import ChipsetDB
         from airdriver.gui.main_window import MainWindow
         with _Collector() as c:
             w = MainWindow()
             _settle(w)
-            known = [a for a in w.adapters if a.known]
-            chip = known[0].chipset
-            object.__setattr__(chip, "notes", '<img src="http://attacker.invalid/n">')
-            w.select_adapter(known[0])
+            adapters = _loaded(w)
+            known = next(a for a in adapters if a.known)
+            object.__setattr__(known.chipset, "notes",
+                               '<img src="http://attacker.invalid/n">')
+            w.select_adapter(known)
             _settle(w)
             c.check(self, "rendering hostile database notes")
             # Escaped, so the markup survives as text rather than as a tag.
