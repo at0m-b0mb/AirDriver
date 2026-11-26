@@ -15,6 +15,7 @@ of Qt: those run everywhere, this runs where there is a Qt to run it on.
 
 from __future__ import annotations
 
+import atexit
 import os
 import sys
 import unittest
@@ -36,6 +37,35 @@ def _app():
     if _APP is None:
         _APP = QApplication.instance() or QApplication([])
     return _APP
+
+
+@atexit.register
+def _shutdown_qt() -> None:
+    """Tear Qt down on purpose, before the interpreter starts dismantling itself.
+
+    Left alone, CPython frees the QApplication during its own shutdown, by
+    which point the C++ side may already be looking at half-freed Python
+    objects — on Linux/offscreen that is a **segfault after the tests have
+    all passed**, which reads as "the GUI tests crashed CI" when in fact the
+    suite printed OK and then died on the way out. Closing the windows and
+    deleting the application here keeps the exit code meaningful.
+    """
+    global _APP
+    app, _APP = _APP, None
+    if app is None:
+        return
+    try:
+        for widget in list(app.topLevelWidgets()):
+            widget.close()
+            widget.deleteLater()
+        app.processEvents()
+    except Exception:  # noqa: BLE001 — we are exiting; nothing left to report to
+        pass
+    try:
+        import shiboken6
+        shiboken6.delete(app)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 class _Collector:
