@@ -23,12 +23,13 @@ so it works over SSH on a headless box.
 from __future__ import annotations
 
 import argparse
+import shlex
 import sys
 
 from . import __version__, __codename__
 from .core import (detector, diagnose, manage, monitor as mon, report as rep,
                    setup as setup_flow, system, verify)
-from .core.chipset_db import ChipsetDB
+from .core.chipset_db import ChipsetDB, DatabaseError
 from .core.installer import Executor, build_plan, build_remove_plan
 
 # --- tiny ANSI helpers (no dependency) ------------------------------------- #
@@ -84,6 +85,29 @@ def _adapter_json(a) -> dict:
     }
 
 
+def _print_contested(entry: dict, usb_id: str, indent: str = "     ") -> None:
+    """Say why an id is deliberately unidentified, rather than just 'unknown'."""
+    drivers = ", ".join(entry.get("drivers", ())) or "more than one driver"
+    print(f"{indent}{yellow('Claimed by two drivers')} ({drivers}) — "
+          f"AirDriver will not guess.")
+    note = entry.get("note", "")
+    for line in _wrap(note, 66):
+        print(f"{indent}{dim(line)}")
+
+
+def _wrap(text: str, width: int) -> list:
+    words, lines, cur = text.split(), [], ""
+    for w in words:
+        if cur and len(cur) + 1 + len(w) > width:
+            lines.append(cur)
+            cur = w
+        else:
+            cur = f"{cur} {w}" if cur else w
+    if cur:
+        lines.append(cur)
+    return lines
+
+
 def cmd_scan(args, db: ChipsetDB) -> int:
     adapters = detector.detect(db)
     if getattr(args, "json", False):
@@ -111,7 +135,11 @@ def cmd_scan(args, db: ChipsetDB) -> int:
             print(f"     {_cap_badge(a.chipset)}")
             print(f"     {dim(a.chipset.band)}")
         else:
-            print(f"     {yellow('Not in database — run: airdriver install ' + a.usb_id)}")
+            contested = db.contested(a.usb_id)
+            if contested:
+                _print_contested(contested, a.usb_id)
+            else:
+                print(f"     {yellow('Not in database — run: airdriver contribute ' + a.usb_id)}")
         print()
     return 0
 
@@ -153,6 +181,13 @@ def cmd_info(args, db: ChipsetDB) -> int:
     key = args.target.lower()
     chip = db.match_usb(key) or db.get(key)
     if not chip:
+        contested = db.contested(key)
+        if contested:
+            print(bold(f"\n{key}") + dim("  (deliberately unassigned)"))
+            print()
+            _print_contested(contested, key, indent="  ")
+            print()
+            return 0
         print(red(f"No chipset matches '{args.target}'."))
         return 1
     print(bold(f"\n{chip.name}") + dim(f"  ({chip.vendor})"))
@@ -198,7 +233,9 @@ def cmd_install(args, db: ChipsetDB) -> int:
         print(red("That adapter isn't in the database yet."))
         return _unknown_flow(target, db)
 
-    plan = build_plan(target, info, force_dkms=args.force_dkms, prefer_offline=args.offline)
+    plan = build_plan(target, info, force_dkms=args.force_dkms,
+                      prefer_offline=args.offline,
+                      prefer_kernel=getattr(args, "prefer_kernel", False))
     print(BANNER)
     print(plan.describe())
     if args.dry_run:
@@ -247,8 +284,25 @@ def _unknown_flow(adapter, db: ChipsetDB) -> int:
     return 0
 
 
+def _default_iface() -> str:
+    """The first live wireless interface, so `airdriver monitor start` works on
+    a box whose adapter is wlan1 (or wlp3s0) instead of silently acting on a
+    hardcoded 'wlan0' that does not exist."""
+    ifaces = detector.list_wireless_interfaces()
+    # Prefer one already in monitor mode — that is what `stop`/`test` want.
+    for i in ifaces:
+        if (i.mode or "").lower() in ("monitor", "mesh"):
+            return i.name
+    return ifaces[0].name if ifaces else "wlan0"
+
+
 def cmd_monitor(args, db: ChipsetDB) -> int:
-    iface = args.interface
+    iface = args.interface or _default_iface()
+    if args.action in ("start", "stop", "test") and not mon.valid_interface(iface):
+        print(red(f"'{iface}' is not a valid interface name."))
+        return 1
+    if args.action != "status" and not args.interface:
+        print(dim(f"(no interface given — using {iface})"))
     if args.action == "status":
         r = mon.status()
     elif args.action == "start":
@@ -278,6 +332,11 @@ def cmd_report(args, db: ChipsetDB) -> int:
 def cmd_db(args, db: ChipsetDB) -> int:
     if getattr(args, "check", False):
         problems = db.problems()
+        if db.load_warnings:
+            print(yellow(bold(f"\n[!] {len(db.load_warnings)} value(s) were dropped at "
+                              "load time and never reach a command:\n")))
+            for w in db.load_warnings:
+                print(f"  {yellow('-')} {w}")
         if problems:
             print(red(bold(f"\n✗ Database has {len(problems)} problem(s):\n")))
             for p in problems:
@@ -405,9 +464,14 @@ def cmd_fix(args, db: ChipsetDB) -> int:
     plan.steps.append(Step(title="Rebuild module dependency map",
                            shell="sudo depmod -a", privileged=True, optional=True))
     for m in mods:
+        # Quoted like every other module name that reaches a root shell. This
+        # one was pasted in bare: the value comes from the chipset database,
+        # which is community-contributed, so it is exactly the kind of string
+        # that must not be trusted to contain only a module name.
+        q = shlex.quote(m)
         plan.steps.append(Step(
             title=f"Reload module '{m}'",
-            shell=f"sudo modprobe -r {m} 2>/dev/null; sudo modprobe {m} 2>&1 || true",
+            shell=f"sudo modprobe -r {q} 2>/dev/null; sudo modprobe {q} 2>&1 || true",
             privileged=True, optional=True))
     Executor(info).run(plan, log=print)
     print(bold("\n── Verification ─────────────────────────────"))
@@ -686,10 +750,14 @@ def build_parser() -> argparse.ArgumentParser:
     pin.add_argument("--yes", "-y", action="store_true", help="Don't prompt for confirmation")
     pin.add_argument("--force-dkms", action="store_true", help="Build DKMS even if an in-kernel driver exists")
     pin.add_argument("--offline", action="store_true", help="Prefer the bundled offline driver")
+    pin.add_argument("--prefer-kernel", action="store_true",
+                     help="Use the in-kernel driver even for chipsets whose out-of-tree "
+                          "driver injects better (fastest path if you only need to get online)")
 
     pm = sub.add_parser("monitor", help="Monitor mode / injection test")
     pm.add_argument("action", choices=["status", "start", "stop", "test", "killservices"])
-    pm.add_argument("interface", nargs="?", default="wlan0")
+    pm.add_argument("interface", nargs="?", default=None,
+                    help="wireless interface (default: the first one detected)")
 
     pvf = sub.add_parser("verify", help="Check a driver is installed, loaded & bound")
     pvf.add_argument("target", nargs="?", help="usb id / chipset id (default: first detected)")
@@ -763,12 +831,36 @@ _DISPATCH = {
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    db = ChipsetDB.load()
-    if not args.command:
-        if args.no_gui:
-            return cmd_scan(args, db)
-        return cmd_gui(args, db)
-    return _DISPATCH[args.command](args, db)
+    try:
+        db = ChipsetDB.load()
+    except DatabaseError as exc:
+        # A broken database used to surface as a raw traceback, which looks like
+        # AirDriver itself crashed. Say what is wrong and how to put it back.
+        print(red(f"Chipset database problem: {exc}"), file=sys.stderr)
+        print(dim("  Reinstall AirDriver, or restore airdriver/data/chipsets.json "
+                  "from git:\n    git checkout -- airdriver/data/chipsets.json"),
+              file=sys.stderr)
+        return 1
+    if db.load_warnings:
+        # The file was edited and carried values AirDriver will not execute.
+        print(yellow(f"[!] {len(db.load_warnings)} unsafe value(s) in the chipset "
+                     "database were ignored:"), file=sys.stderr)
+        for w in db.load_warnings[:8]:
+            print(yellow(f"    - {w}"), file=sys.stderr)
+        print(dim("    Run 'airdriver db --check' for the full list."), file=sys.stderr)
+    try:
+        if not args.command:
+            if args.no_gui:
+                return cmd_scan(args, db)
+            return cmd_gui(args, db)
+        return _DISPATCH[args.command](args, db)
+    except KeyboardInterrupt:
+        # Ctrl-C in the middle of a long build is a normal thing to do; it
+        # should not print 30 lines of traceback.
+        print(yellow("\nInterrupted."), file=sys.stderr)
+        return 130
+    except (EOFError, BrokenPipeError):
+        return 130
 
 
 if __name__ == "__main__":

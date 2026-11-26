@@ -114,8 +114,24 @@ def _dmesg_for(usb_id: str) -> str:
     if not out:
         return ""
     vid, _, pid = usb_id.partition(":")
-    keys = (f"{vid}:{pid}", f"idVendor={vid}", f"idProduct={pid}", "usb ", "wlan")
-    hits = [l.strip() for l in out.splitlines() if any(k in l.lower() for k in keys)]
+    # This text is headed for a PUBLIC GitHub issue, so the filter names *this*
+    # device and nothing else. It used to match the bare words "usb " and
+    # "wlan", which pulled in every other peripheral's enumeration lines —
+    # other people's phone names, printer models and device serials included.
+    keys = (f"{vid}:{pid}", f"idvendor={vid}", f"idproduct={pid}")
+    hits = []
+    for line in out.splitlines():
+        low = line.lower()
+        if any(k in low for k in keys):
+            hits.append(line.strip())
+            continue
+        # Driver-binding lines are the other half of the story, but only when
+        # they name a Wi-Fi driver rather than merely containing "usb".
+        if ("wlan" in low or "ieee80211" in low) and any(
+                d in low for d in ("rtl", "rtw", "mt76", "ath", "carl", "rt2800",
+                                   "r8188", "88xx", "88x2", "8812", "8821", "iwlwifi",
+                                   "brcm", "zd1211", "p54", "rndis_host", "firmware")):
+            hits.append(line.strip())
     return "\n".join(hits[-20:])[:1500]
 
 

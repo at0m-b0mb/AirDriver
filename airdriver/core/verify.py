@@ -74,7 +74,10 @@ def dkms_status_for(chip: Chipset) -> list[str]:
     hits = []
     for line in out.splitlines():
         low = _norm(line)
-        if any(n and n in low for n in names):
+        # Needles shorter than four characters match almost anything in
+        # `dkms status`, which would report an unrelated module as this
+        # chipset's. Substring matching earns its keep only on real names.
+        if any(len(n) >= 4 and n in low for n in names):
             hits.append(line.strip())
     return hits
 

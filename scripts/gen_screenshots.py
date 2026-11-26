@@ -10,6 +10,12 @@ Produces:
   docs/screenshots/gui-overview.png       — main window, adapter selected
   docs/screenshots/gui-install-plan.png   — unknown adapter + previewed plan
   docs/screenshots/gui-chipsets.png       — searchable chipset browser
+  docs/screenshots/gui-setup.png          — the one-press flow, dry run
+  docs/screenshots/gui-drivers.png        — installed-driver management panel
+
+Everything shown is produced by actually running the app in demo mode. Nothing
+here types a transcript into the log by hand: a screenshot of output the tool
+did not generate is a lie about what the tool does.
 """
 from __future__ import annotations
 
@@ -73,14 +79,42 @@ def main() -> int:
 
     # 3) The chipset browser, filtered — shows the breadth of the database.
     #    Built directly (rather than via the modal dialog) so this stays headless.
-    _shot_chipsets(app, win)
+    _shot_dialog(app, win, win.show_chipsets, "gui-chipsets.png", 880, 620)
+
+    # 4) The driver-management panel.
+    _shot_dialog(app, win, win.show_manage, "gui-drivers.png", 800, 560)
+
+    # 5) The one-press flow, as a dry run: a real plan, a real summary, the
+    #    progress bar and the colour-coded log — all of it genuinely generated.
+    _shot_setup(app, win)
 
     win.close()
     return 0
 
 
-def _shot_chipsets(app, win):
-    """Render the chipset-browser dialog without entering its modal loop."""
+def _shot_setup(app, win):
+    from airdriver.core import setup as setup_flow
+    known = next((a for a in win.adapters if a.known), None)
+    if known is None:
+        return
+    win.select_adapter(known)
+    win.log.clear()
+    win.progress.setRange(0, 9)
+    win.progress.setValue(7)
+    win.progress_label.setText("step 7 of 9")
+    win.progress.show()
+    out = setup_flow.run(win.db, target=known.usb_id, dry_run=True, log=win.log_line)
+    win.log_line(setup_flow.describe(out))
+    win._set_verdict(out.headline,
+                     "good" if out.ready else ("warn" if out.connected else "warn"))
+    _settle(app, 500)
+    win.grab().save(str(OUT / "gui-setup.png"))
+    print("wrote", OUT / "gui-setup.png")
+    win.progress.hide()
+
+
+def _shot_dialog(app, win, opener, name: str, w: int, h: int):
+    """Render a modal dialog without entering its event loop."""
     from PySide6.QtWidgets import QDialog
     orig_exec = QDialog.exec
     captured = {}
@@ -91,15 +125,15 @@ def _shot_chipsets(app, win):
 
     QDialog.exec = fake_exec
     try:
-        win.show_chipsets()
+        opener()
         dlg = captured.get("dlg")
         if dlg is None:
             return
-        dlg.resize(880, 620)
+        dlg.resize(w, h)
         dlg.show()
         _settle(app, 500)
-        dlg.grab().save(str(OUT / "gui-chipsets.png"))
-        print("wrote", OUT / "gui-chipsets.png")
+        dlg.grab().save(str(OUT / name))
+        print("wrote", OUT / name)
         dlg.close()
     finally:
         QDialog.exec = orig_exec

@@ -2,6 +2,163 @@
 
 All notable changes to AirDriver are documented here.
 
+## [1.0.0] — 2026-11-26 · "Clear Signal"
+
+The first stable release. A second security pass over everything that runs as
+root, six new chipset families cross-checked against the kernel's own device
+tables, and a GUI that says what is happening while it happens.
+
+### Fixed — security
+
+**The chipset database was validated at review time, but not at load.**
+v0.9.1 added `ChipsetDB.problems()` and wired it into CI, which stops a hostile
+*pull request*. It does nothing about the file as it exists on disk: it is plain
+JSON inside the install, users hand-edit it to add their own adapter, and
+`ChipsetDB.load(path)` will read one from anywhere. Nothing called `problems()`
+before the values were interpolated into root commands.
+
+Every value is now re-checked when the file is read, and anything that fails is
+**dropped rather than executed** — dropped, not refused outright, because one
+malformed entry must not take Wi-Fi away from a machine that has no other way to
+get online. Each drop is reported: on the CLI's stderr, in the GUI log, and in
+`airdriver db --check`, which still reports the original problem rather than the
+sanitised result. `ChipsetDB.load(..., strict=True)` raises instead.
+
+**`airdriver fix` interpolated a module name into a root shell unquoted.**
+Every other call site quoted it; this one built
+`sudo modprobe -r {m}; sudo modprobe {m}` by f-string. The value comes from the
+database, which is exactly the kind of string that must not be trusted to
+contain only a module name.
+
+**A malicious USB descriptor could make the GUI fetch a URL.** A `QLabel` left in
+its default `AutoText` mode renders a string containing tags as *rich text*, and
+Qt then requests any resource it names. A USB device reporting
+`<img src="http://attacker/x">` as its product name is attacker-controlled input
+on a path straight to a widget. Every label that shows device-reported text is
+now pinned to `Qt.PlainText`, and every database value interpolated into real
+rich text — the details pane, the chipset browser, the driver table, which also
+renders `dkms status` output — goes through `html.escape()`. `tests/test_gui_smoke.py`
+asserts it.
+
+**The Secure Boot signing key was briefly world-readable.** `openssl req` created
+`MOK.priv` with the process umask and `chmod 600` ran afterwards. It is created
+under `umask 077` now, and the key is 4096-bit rather than 2048.
+
+**`airdriver contribute` put other devices in a public issue.** The `dmesg` filter
+matched the bare words `usb ` and `wlan`, which swept in every other peripheral's
+enumeration lines — other people's phone names, printer models, device serials.
+It now matches this device's `vid:pid`, plus Wi-Fi driver-binding lines.
+
+**Interface names reaching privileged tools are validated.** The interface is
+typed into an editable combo box and handed to `sudo airmon-ng …`; `-x` is a
+perfectly good string and a terrible interface name. `iw` is also called as
+`iw dev <name>` now — the shorthand resolves the first word as a command first,
+so an interface called `list` or `phy` would have been read as one.
+
+### Fixed — correctness
+
+- **`airdriver setup <usb_id>` crashed** with an `AttributeError` when the id named
+  an adapter that is plugged in but not in the database: `pick_adapter` matches any
+  detected adapter, and the next line read `chip.monitor_mode` on `None`. It now
+  says what is wrong and points at `airdriver contribute`.
+- **The setup flow's Driver stage claimed success whatever happened.** It ignored
+  the executor's return value and always printed "install plan ran". It reports
+  what actually happened; verification remains the authority on whether the
+  adapter works.
+- **An adapter with no bound driver was reported as "Working".** The demo data
+  carried a placeholder interface and `status` read it as a live one.
+- **Closing the GUI mid-install aborted the process.** `QThread.quit()` cannot
+  interrupt a worker blocked in a DKMS build, so the 5-second wait always timed
+  out and Qt then destroyed a running thread. It asks first, then stops it properly.
+- **A stuck step hung forever.** Steps now run with stdin closed and a 45-minute
+  ceiling — generous enough for a real compile on slow hardware, finite enough
+  that a command which decided to ask a question does not hang the GUI invisibly.
+- **The GUI's details pane showed the previous adapter's specs** when you selected
+  one that is not in the database: `deleteLater()` defers to the next event loop,
+  so the old widgets were still on screen under the new name.
+- **`airdriver monitor` defaulted to a hardcoded `wlan0`** and silently acted on an
+  interface that may not exist. It defaults to the first wireless interface found,
+  preferring one already in monitor mode.
+- **Reports written under `sudo` landed in `/root`**, where the person who asked for
+  one cannot open it. They go to the invoking user's home and are chowned back.
+- A corrupt or missing `chipsets.json` printed a traceback; it prints an error and
+  how to restore the file. `Ctrl-C` during a build exits 130 instead of 30 lines of
+  traceback.
+- An unknown key in `kernel_native` raised `TypeError` and stopped the whole tool
+  from loading.
+
+### Added — the database: 52 → **58 families**, 1258 → **1286 IDs**
+
+Every id below was taken from the kernel's own device tables, fetched and
+diffed against the database rather than recalled.
+
+- **RTL8822CU / RTL8822CS** — in-kernel `rtw88_8822cu` (6.2+).
+- **RTL8723DU** — in-kernel `rtw88_8723du` (6.2+); previously reported as unknown.
+- **MT7663U / MT7668AU** — in-kernel `mt7663u` (5.8+).
+- **MT7915 / MT7916 / MT7906** — AP-class Wi-Fi 6 on miniPCIe/M.2, `mt7915e` (5.11+).
+- **MT7996 / MT7992 / MT7990** — Wi-Fi 7, `mt7996e`.
+- **RS9113 / RS9116** — Redpine/Silicon Labs, `rsi_91x`.
+- The in-kernel MediaTek PCIe table is complete now (MT7921E/MT7922/MT7925E and
+  their ITTIM-branded variants), and `2c4e:0105` joins RTL8821CU.
+
+**One real mis-assignment fixed:** `1740:0605` was filed under AR9170/carl9170,
+whose kernel table contains no `0x1740` id at all — it is an rt2800usb device, and
+AirDriver was offering it an Atheros driver.
+
+**Seven contested ids are no longer guessed at.** `0471:2126`, `0e66:0020`,
+`7392:b711`, `148f:760a`, `050d:7050`, `0707:ee13` and `13b1:0043` are each claimed
+by two or more drivers, because two different chips shipped behind the same id.
+Guessing is the worst option available: the install blacklists the other driver's
+module, so a wrong guess leaves the adapter with **no** driver at all. They live in
+a new `contested_ids` map, and `airdriver info <id>`, `scan` and the GUI explain the
+situation instead.
+
+### Added — injection-grade chipsets prefer the out-of-tree driver
+
+`rtw88` gained in-kernel RTL8812AU (6.14) and RTL8814AU (6.16) support. Because
+AirDriver prefers an in-kernel driver whenever one exists, that quietly started
+skipping the DKMS build for the AWUS036ACH and AWUS1900 — handing a pentester the
+driver the database itself describes as worse for injection.
+
+Six chipsets now carry `prefer_out_of_tree`, and for those a usable in-kernel
+driver is a *fallback* rather than the destination. The plan says so in words, and
+`airdriver install --prefer-kernel` takes the fast path when you only need to get
+online. With nothing buildable (offline, no bundle) it falls back to the in-kernel
+driver and explains why.
+
+### Added — the GUI
+
+- A **verdict strip** at the top of the details pane: one line answering "is this
+  adapter ready?", coloured on its left edge, updated by every operation.
+- A **real progress bar**, driven by the `[3/9]` step headers the executor already
+  logged, plus a step counter. A DKMS build runs for minutes; a window that looks
+  frozen is the main reason people kill one half-way.
+- A **colour-coded log** — failures red, warnings amber, successes green, the
+  driver's own `[airdriver]` lines cyan.
+- **Adapters ranked by capability**, with the most capable flagged `BEST`. On a
+  laptop with an internal card and a USB injector plugged in, the injector is what
+  you came to set up — and the top card is the one auto-selected.
+- **A spec grid** instead of a run-on paragraph, with an injection-quality meter,
+  and install paths in words ("DKMS build from source", not `dkms_git`).
+- **Keyboard shortcuts** — <kbd>Ctrl</kbd>+<kbd>↵</kbd> get me ready,
+  <kbd>Ctrl</kbd>+<kbd>R</kbd> rescan, <kbd>Ctrl</kbd>+<kbd>P</kbd> preview,
+  <kbd>Ctrl</kbd>+<kbd>K</kbd> verify, <kbd>Ctrl</kbd>+<kbd>D</kbd> diagnose,
+  <kbd>Ctrl</kbd>+<kbd>F</kbd> chipsets, <kbd>F1</kbd> help, and five more.
+
+### Added — tests & tooling
+
+125 → **171 tests**. New: `tests/test_gui_smoke.py` and `tests/test_hardening.py`.
+
+The GUI tests exist because of a specific trap: **an exception raised inside a Qt
+slot never reaches the caller.** Qt catches it, prints it to stderr and carries on,
+so a panel that blew up half-way through drawing still "renders" and the test that
+built the window still passes. Each test installs a collecting `sys.excepthook`,
+spins the real event loop, and asserts nothing was raised.
+
+`scripts/fmt_chipsets.py` is the formatter `chipsets.json` was always written with,
+now in the repo and checked by its own test. Reformatting the database turns a
+one-line change into a 1 200-line diff, which is how a bad id slips through review.
+
 ## [0.9.1] — 2026-09-17 · security hardening
 
 A security review of the whole codebase, on the premise that matters here:

@@ -2,28 +2,97 @@
 
 <img src="docs/banner.png" alt="AirDriver — WiFi adapter driver auto-installer for Kali Linux & Parrot OS" width="840">
 
-<br/><br/>
+<h3>Plug in the adapter. Run one command. Get monitor mode and injection.</h3>
 
-[![Platform](https://img.shields.io/badge/platform-Kali%20%7C%20Parrot%20%7C%20Debian-1f9e72?style=flat-square)](https://www.kali.org/)
+<p><em>AirDriver identifies your Wi-Fi chipset, installs the driver that actually works for it,<br>
+then proves the thing is loaded, bound, sniffing and injecting — or tells you exactly why it isn't.</em></p>
+
+[![Latest release](https://img.shields.io/github/v/release/at0m-b0mb/AirDriver?style=for-the-badge&color=2ee6a6&labelColor=0b0f16)](../../releases/latest)
+[![Tests](https://img.shields.io/github/actions/workflow/status/at0m-b0mb/AirDriver/ci.yml?branch=main&style=for-the-badge&label=tests&color=3fb950&labelColor=0b0f16)](../../actions)
+[![Chipsets](https://img.shields.io/badge/chipsets-58_families_·_1286_IDs-f5a623?style=for-the-badge&labelColor=0b0f16)](https://at0m-b0mb.github.io/AirDriver/)
+[![License](https://img.shields.io/badge/license-MIT-38bdf8?style=for-the-badge&labelColor=0b0f16)](LICENSE)
+
+[![Platform](https://img.shields.io/badge/Kali%20·%20Parrot%20·%20Debian%20·%20Ubuntu-1f9e72?style=flat-square&logo=linux&logoColor=white)](https://www.kali.org/)
 [![Python](https://img.shields.io/badge/python-3.9%2B-2ee6a6?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![GUI](https://img.shields.io/badge/GUI-PySide6-38bdf8?style=flat-square&logo=qt&logoColor=white)](https://doc.qt.io/qtforpython/)
-[![Chipsets](https://img.shields.io/badge/chipsets-52%20families%20%C2%B7%201258%20IDs-f5a623?style=flat-square)](airdriver/data/chipsets.json)
-[![CI](https://img.shields.io/github/actions/workflow/status/at0m-b0mb/AirDriver/ci.yml?branch=main&style=flat-square&label=tests)](../../actions)
-[![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
+[![Zero deps](https://img.shields.io/badge/CLI-zero%20dependencies-8b949e?style=flat-square)](#development--tests)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-2ee6a6?style=flat-square)](CONTRIBUTING.md)
 
-**Plug in your adapter → AirDriver identifies the chipset → installs the right driver.**
-
-Built for pentesters who just want monitor mode and packet injection to *work*.
-`Realtek` · `Atheros` · `MediaTek/Ralink` · `Intel` · `Qualcomm` · `Broadcom` — **52 chipset families · 1258 USB/PCI IDs** · hybrid online/offline · a clean GUI **and** a full CLI.
-
-Not just an installer: AirDriver **manages** your drivers — it rebuilds them when a kernel
-upgrade breaks Wi-Fi, signs them for Secure Boot, and tells you honestly whether a card
-can really inject.
+**[Browse every supported chipset →](https://at0m-b0mb.github.io/AirDriver/)**
 
 </div>
 
+```console
+$ sudo airdriver setup
+
+  ✓ Detect adapter      ALFA AWUS036ACH  (0bda:8812, USB)
+  ✓ Capability          monitor yes · injection good
+  ✓ System readiness    kernel 6.12.13-amd64, headers + DKMS present
+  ✓ Driver              install plan ran clean (dkms_git)
+  ✓ Verify              88XXau bound to wlan1
+  ✓ Monitor mode        wlan1mon is in monitor mode
+  ✓ Injection           aireplay-ng confirmed injection on wlan1mon
+
+  Realtek RTL8812AU is pentest-ready — sniffing and injection both confirmed.
+```
+
 ---
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+### The problem
+
+Getting an ALFA/Panda/TP-Link adapter working on Kali is a rite of passage. Work out
+the chipset. Find the right DKMS repo — half are abandoned. Install headers that match
+the kernel you are *running*, not the one you installed. Fight Secure Boot. Blacklist
+the in-tree module that keeps stealing the device.
+
+Then the build says `0`, and the adapter still does nothing.
+
+And the catch‑22: no driver means no internet, which means you cannot download the driver.
+
+</td>
+<td width="50%" valign="top">
+
+### What AirDriver does
+
+Reads your hardware out of **sysfs**, matches it against **1286 USB/PCI IDs**, and picks
+the best of four install paths — in-kernel, apt, DKMS from the maintainer's git, or a
+**bundled offline copy** for the air-gapped case.
+
+Then it checks the driver really **bound**, unblocks rfkill, brings the interface up,
+switches on monitor mode and runs the injection self-test.
+
+One verdict at the end. No guessing, and nothing claimed that wasn't observed.
+
+</td>
+</tr>
+</table>
+
+---
+
+<details>
+<summary><b>Contents</b></summary>
+
+[Quick start](#-quick-start) ·
+[What you get](#what-you-get) ·
+[Honesty, specifically](#honesty-specifically) ·
+[Screenshots](#screenshots) ·
+[Install & run](#install--run) ·
+[Usage](#usage) ·
+[Troubleshooting](#-troubleshooting) ·
+[Supported chipsets](#supported-chipsets) ·
+[How driver selection works](#how-driver-selection-works) ·
+[Report an adapter](#adapter-not-recognised-report-it-in-30-seconds) ·
+[Adding a chipset](#adding-a-chipset) ·
+[Development & tests](#development--tests) ·
+[Responsible use](#%EF%B8%8F-responsible-use) ·
+[What's new](#whats-new) ·
+[Contributing](#contributing)
+
+</details>
 
 ## ⚡ Quick start
 
@@ -77,111 +146,132 @@ cd AirDriver
 Stuck on the first run? Jump to [**Troubleshooting**](#-troubleshooting) — the two most
 common gotchas (the GUI not opening under `sudo`, and Qt `xcb` errors) are solved there.
 
-## Why
+## What you get
 
-Getting an Alfa/Panda/TP-Link adapter working on Kali or Parrot is a rite of passage:
-figure out the chipset, find the *right* DKMS repo (half of them are abandoned),
-install kernel headers, fight Secure Boot, blacklist the in-tree module… AirDriver
-automates all of it and explains what it's doing.
+| | |
+|---|---|
+| ⭐ **One command, end to end** | `airdriver setup` goes from *plugged in* to *injection confirmed* — detect, install, verify it bound, monitor mode, injection self-test — and finishes with **one honest verdict**. The GUI's **Get me ready** runs exactly the same flow. |
+| 🔍 **Detection from the kernel itself** | USB and PCI devices come straight out of **sysfs**, not scraped from `lsusb`/`lspci`, so a minimal install with no `usbutils` still detects everything. Interfaces are matched to adapters **by sysfs device path**, so a dongle's `wlan1` is never reported against the internal card. |
+| 🧠 **Four install paths, best one chosen** | In-kernel (skip the build entirely) → apt → DKMS from the maintainer's git → a bundled offline copy. Out-of-tree builds run the maintainer's own `install-driver.sh` non-interactively, which is the supported way to do it. |
+| 🎯 **Injection-first where it matters** | For the chipsets people buy *for* injection, a newer kernel is not automatically the right answer. AirDriver builds the out-of-tree driver anyway and says why — `--prefer-kernel` if you only need to get online. |
+| ✅ **Verified, not assumed** | After the build it checks the module is **built, loaded and bound**, reads monitor mode back from **sysfs** rather than trusting `airmon-ng`'s exit code, and names the exact fix when something is wrong. |
+| 🔧 **Survives kernel upgrades** | The #1 way Wi-Fi "randomly breaks" on Kali. `airdriver status` spots the stale module instantly; `airdriver rebuild` fixes it. |
+| 🔐 **Secure Boot** | `airdriver sign` generates a MOK key, signs every built module (handling compressed `.ko.xz`/`.zst` properly) and hands you the one step that needs your own password. |
+| 🩺 **One-shot `diagnose`** | A complete snapshot — kernel, headers, Secure Boot, rfkill, USB/PCI, interfaces, modules, DKMS, `dmesg` tail — copied to your clipboard. The single thing to paste when you ask for help. |
+| 💿 **Air-gapped installs** | Pre-fetch driver sources while you have internet; build them on a machine that has none. |
+| 🖥️ **GUI and CLI, equally complete** | A PySide6 app with keyboard shortcuts, and a full CLI for headless boxes over SSH. Neither is a second-class citizen. |
 
-It also solves the **catch-22**: no WiFi driver means no internet, which means you
-can't *download* the driver. AirDriver can bundle driver sources offline and build
-them on an air-gapped machine.
+<details>
+<summary><b>…and the rest</b> (click to expand)</summary>
 
-## Features
-
-- ⭐ **One command does the whole job** — `airdriver setup` (or **Get me ready** in the
-  GUI) takes an adapter from *plugged in* to *injection confirmed*: it picks the most
-  capable adapter present, installs the driver, checks it really **bound**, switches on
-  monitor mode and runs the injection self-test — then gives you **one honest verdict**
-  and the exact next step. A chipset that physically cannot inject is told apart from a
-  broken install, and a failed injection test says *"not confirmed here"* rather than
-  blaming your driver, because that test legitimately fails with no AP in range.
-- 🔍 **Auto-detection, straight from the kernel** — USB and PCI devices are read out of
-  **sysfs**, not scraped from `lsusb`/`lspci`, so detection is complete on a minimal
-  install with no `usbutils`/`pciutils` (they're used when present, only to borrow their
-  vendor-resolved product names). Live wireless interfaces are correlated to the adapter
-  that owns them **by sysfs device path**, so with an internal card *and* a dongle
-  plugged in each interface lands on the right one. Ethernet NICs, Bluetooth radios and
-  root hubs are filtered out by device class — never offered a Wi-Fi driver.
-- 🧠 **Smart driver selection** — prefers the **in-kernel** driver when your kernel is
-  new enough (no pointless DKMS build), otherwise apt → DKMS-from-git → offline bundle.
-  For out-of-tree drivers it runs the maintainer's own `install-driver.sh` (morrownr /
-  aircrack-ng) non-interactively, so the build is done the *correct*, supported way.
-- 🔁 **Auto-fallback installs** — when the apt driver package is missing or hasn't caught
-  up with your kernel, AirDriver *transparently compiles the maintainer's driver from
-  source* in the same run (installing build prerequisites on the fly) instead of just
-  failing. One click, and it finds a way to get you a working driver.
-- ✅ **Verified installs** — after building, AirDriver checks the driver is really
-  **built, loaded, and bound** to your adapter (not just "the build exited 0") and gives
-  an honest verdict with the exact fix when it isn't — Secure Boot, missing firmware,
-  a conflicting in-kernel module, or a needed re-plug/reboot.
+- 🔁 **Auto-fallback installs** — when the apt package is missing or hasn't caught up with
+  your kernel, AirDriver transparently compiles the maintainer's driver from source in the
+  same run, installing build prerequisites on the fly, instead of just failing.
 - 📡 **Brings it online** — after loading the module it unblocks `rfkill`, brings the
-  interface up, and nudges NetworkManager, so a clean build is a *working* adapter and
-  not just a loaded module.
-- 🔧 **Survives kernel upgrades** — the #1 way Wi-Fi "randomly breaks" on Kali: you upgrade,
-  reboot, and the out-of-tree module was never built for the new kernel. `airdriver status`
-  spots it instantly and `airdriver rebuild` fixes it in one command.
-- 🔐 **Secure Boot signing** — `airdriver sign` generates a MOK key, signs every built module
-  (handling compressed `.ko.xz`/`.zst` correctly), and hands you the one step that needs your
-  own password: enrolling the key.
+  interface up and nudges NetworkManager, because a loaded module is not a working adapter.
 - 💿 **Flip-storage dongles** — many cheap adapters boot as a fake CD-ROM full of Windows
-  drivers and never appear as Wi-Fi. AirDriver spots them and `airdriver modeswitch` ejects it.
+  drivers and never appear as Wi-Fi. AirDriver spots them; `airdriver modeswitch` ejects it.
 - 🧹 **Remove & fix** — `airdriver remove` cleanly wipes a half-broken driver for a fresh
-  retry; `airdriver fix` reloads it (depmod + modprobe); both surface the relevant `dmesg`.
-- 🩺 **One-shot `diagnose`** — `airdriver diagnose` prints (and copies) a complete snapshot
-  — kernel/headers, Secure Boot, rfkill, USB/PCI list, interfaces, modules, DKMS, and the
-  `dmesg` tail — the single thing to paste when you ask for help.
-- 🌐 **Hybrid online/offline** — uses apt/git when connected, falls back to a
-  pre-fetched offline copy when not.
-- 🩺 **System doctor** — checks kernel headers, DKMS, build tools, **Secure Boot**, and
-  root before it ever tries to build, so failures are caught early.
-- 🚫 **Conflict handling** — blacklists in-tree modules (e.g. `r8188eu`) that hijack
-  adapters meant for the out-of-tree driver.
-- 📶 **Monitor mode + injection** — enable/disable monitor mode and run an `aireplay-ng`
-  injection self-test right from the GUI (or `airdriver monitor status/start/stop/test`).
-- 📚 **Searchable chipset browser** — the GUI's **Chipsets** panel filters all 52 families
-  and 1258 IDs by name, vendor, band, or `vid:pid` so you can check a card before you buy.
+  retry (and un-blacklists the in-kernel one, so you are never left with *no* driver);
+  `airdriver fix` reloads it. Both surface the relevant `dmesg`.
+- 🚫 **Conflict handling** — blacklists in-tree modules that hijack adapters meant for the
+  out-of-tree driver, and puts them back on removal.
+- 📶 **Monitor mode + injection** — enable/disable and run the `aireplay-ng` self-test from
+  the GUI or `airdriver monitor status|start|stop|test`.
+- 📚 **Searchable chipset browser** — filter all 58 families and 1286 IDs by name, vendor,
+  band or `vid:pid`, in the GUI or on the [web](https://at0m-b0mb.github.io/AirDriver/).
 - 🛒 **Buying advice** — `airdriver recommend` ranks the chipsets that genuinely do monitor
   mode *and* injection, preferring ones that need no driver build at all.
-- 🤖 **Scriptable** — `airdriver scan --json` and `airdriver db --json` emit machine-readable
-  output; `airdriver db --check` validates the database (and runs in CI on every commit).
-- 🎯 **Honest capabilities** — every chipset is flagged for monitor mode **and** real
-  injection quality, so you know before you buy whether a card is attack-grade or
-  connect-only.
-- 🖥️ **Polished GUI** (PySide6) **and** a complete **CLI** for headless/SSH boxes.
-- 📄 **Diagnostic reports** — export JSON + Markdown, perfect for forum help threads.
-- ❓ **Unknown-adapter flow** — if your `VID:PID` isn't known yet, pick the closest chipset
-  to try, then hit **Report this adapter** (or `airdriver contribute`) and AirDriver writes
-  the whole bug report for you — USB descriptors, kernel, `dmesg` and all (and never
-  your adapter's serial number, since the report goes to a public issue).
+- 🤖 **Scriptable** — `scan --json`, `db --json`, `status --json`; `db --check` validates the
+  database and runs in CI on every commit.
+- 📄 **Diagnostic reports** — JSON + Markdown, written to *your* home directory even when the
+  tool is running under `sudo`.
+- ❓ **Unknown-adapter flow** — pick the closest chipset to try, then **Report this adapter**
+  (or `airdriver contribute`) and AirDriver writes the whole report for you: USB descriptors,
+  kernel, `dmesg`. Never your adapter's serial number — that report goes to a public issue.
 - 🖌️ **Renders on a bare box** — every icon is drawn with QPainter, not emoji, so the UI
-  looks right on a minimal Kali install with no emoji font installed.
+  looks right on a minimal Kali install with no emoji font.
+
+</details>
+
+## Honesty, specifically
+
+Most driver tools tell you they succeeded. This one tells you what it observed. That
+distinction is the whole design, and it is enforced by tests:
+
+- **A chipset that cannot inject is hardware, not a failed install.** AirDriver says so
+  instead of reporting an error, and `recommend` never offers it.
+- **A failed injection test says "not confirmed here."** `aireplay-ng --test` legitimately
+  fails with no AP in range; blaming your driver for that would be a lie.
+- **Monitor mode is read back from sysfs**, never inferred from `airmon-ng`'s exit code.
+- **Capability flags come from kernel source, not from recall.** `mac80211` always adds
+  `NL80211_IFTYPE_MONITOR`, so every softmac driver can sniff — which is why
+  **QCA6390/WCN6855 are flagged as unable to sniff at all**: `ath11k`'s own hardware table
+  sets `supports_monitor = false` and clears the flag back out.
+- **Injection is claimed only with a track record.** New silicon is marked `unknown`, not
+  optimistically `true`.
+- **A `vid:pid` claimed by two different drivers is not guessed at.** Seven of them sit in
+  a `contested_ids` list, and AirDriver explains the situation rather than installing a
+  driver that blacklists the other one's module:
+
+  ```console
+  $ airdriver info 148f:760a
+
+    148f:760a  (deliberately unassigned)
+
+      Claimed by two drivers (mt7601u, mt76x0u) — AirDriver will not guess.
+      Two different in-kernel drivers claim this id, so which chip is
+      actually inside depends on the hardware revision. Let the kernel
+      bind whichever it recognises — confirm with 'airdriver diagnose' —
+      and do not force a driver.
+  ```
 
 ## Screenshots
 
 <div align="center">
 
-**Main view** — detected adapters, chipset details, capability badges, and live system status (headers · DKMS · Secure Boot):
+**Main view** — ranked adapters with the most capable one flagged, a spec grid, and live system status (headers · DKMS · Secure Boot):
 
 <img src="docs/screenshots/gui-overview.png" alt="AirDriver main window" width="900">
 
 <br/><br/>
 
-**Unknown adapter?** Identify it from the dropdown, preview the full install plan before anything runs — and **Report this adapter** to get it added to the database:
+**One press does everything** — a real progress bar driven by the install steps, a colour-coded log, and the verdict at the top:
+
+<img src="docs/screenshots/gui-setup.png" alt="AirDriver one-press setup flow" width="900">
+
+<br/><br/>
+
+**Unknown adapter?** Identify it from the dropdown, preview every command before anything runs — and **Report this adapter** to get it added to the database:
 
 <img src="docs/screenshots/gui-install-plan.png" alt="AirDriver identify + install plan" width="900">
 
 <br/><br/>
 
-**Know before you buy** — search all 52 chipset families and 1258 USB/PCI IDs, with honest monitor/injection flags:
+**Know before you buy** — search all 58 chipset families and 1286 USB/PCI IDs, with honest monitor/injection flags:
 
 <img src="docs/screenshots/gui-chipsets.png" alt="AirDriver chipset browser" width="900">
 
+<br/><br/>
+
+**Driver management** — what is installed, whether it is built for the kernel you are running, and the two repairs people actually need:
+
+<img src="docs/screenshots/gui-drivers.png" alt="AirDriver driver management panel" width="820">
+
 </div>
 
-> The screenshots above run on macOS, where AirDriver shows **demo adapters** so the
-> GUI is fully previewable without hardware. On Kali/Parrot it detects your real adapters.
+> The screenshots run on macOS, where AirDriver shows **demo adapters** so the GUI is
+> previewable without hardware. On Kali/Parrot it detects your real ones.
+
+### Keyboard shortcuts
+
+| | | | |
+|---|---|---|---|
+| <kbd>Ctrl</kbd>+<kbd>↵</kbd> | Get me ready | <kbd>Ctrl</kbd>+<kbd>R</kbd> / <kbd>F5</kbd> | Rescan |
+| <kbd>Ctrl</kbd>+<kbd>I</kbd> | Install driver | <kbd>Ctrl</kbd>+<kbd>P</kbd> | Preview plan |
+| <kbd>Ctrl</kbd>+<kbd>K</kbd> | Verify | <kbd>Ctrl</kbd>+<kbd>D</kbd> | Diagnose |
+| <kbd>Ctrl</kbd>+<kbd>F</kbd> | Chipset browser | <kbd>F1</kbd> | Help |
+| <kbd>Ctrl</kbd>+<kbd>L</kbd> | Clear log | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd> | Copy log |
 
 ## Install & run
 
@@ -273,10 +363,15 @@ build them later on a machine with **no internet**.
 sudo airdriver           # launch the graphical app
 ```
 
-Pick your adapter from the cards on the left, review the chipset details and the
-proposed install plan, then hit **Install driver**. Watch progress stream in the
-log. Use **Dry run** to preview without changing anything. The **? Help** button has
-a built-in quick start and troubleshooter.
+Adapters are listed most-capable first, with the best one flagged **BEST**. Pick one,
+check the spec grid, and press **Get me ready** (<kbd>Ctrl</kbd>+<kbd>↵</kbd>) — that
+one button installs, verifies, enables monitor mode and tests injection, with a progress
+bar and a colour-coded log as it goes. The strip at the top of the pane always answers
+"is this adapter ready?".
+
+Tick **Dry run** to see every command without running any of them. **Install driver**,
+**Preview plan**, **Verify** and **Remove** drive the same engine one step at a time.
+**F1** has a built-in quick start and troubleshooter.
 
 ### CLI
 
@@ -292,6 +387,8 @@ airdriver info 0bda:8812        # database details for a usb id / chipset id
 airdriver install               # install driver for the first known adapter
 airdriver install rtl8812au --dry-run   # preview the plan for a chipset
 airdriver install 0bda:c811 --offline   # force the bundled offline driver
+airdriver install rtl8812au --prefer-kernel  # use the in-kernel driver even where the
+                                #   out-of-tree one injects better (just get me online)
 airdriver verify                # did the driver really install, load & bind?
 airdriver fix                   # reload the driver (depmod + modprobe) and re-check
 airdriver remove rtl8814au      # cleanly remove a driver to retry from scratch
@@ -299,8 +396,8 @@ airdriver remove --all          # remove every driver AirDriver installed
 airdriver remove --all --dry-run  # …show what that would do, change nothing
 airdriver diagnose              # full snapshot to share when stuck (rfkill, dmesg, dkms…)
 airdriver monitor status        # show each interface's current mode
-airdriver monitor start wlan0   # enable monitor mode
-airdriver monitor test wlan0    # aireplay-ng injection self-test
+airdriver monitor start         # enable monitor mode (defaults to the interface found)
+airdriver monitor test wlan0mon # aireplay-ng injection self-test
 airdriver report                # write a JSON + Markdown diagnostic report
 airdriver db                    # dump the chipset database
 airdriver db --check            # validate the database (exit non-zero on conflicts)
@@ -414,14 +511,17 @@ with the `VID:PID` so it can be added to the database.
 
 ## Supported chipsets
 
-AirDriver knows **52 chipset families** spanning **1258 USB/PCI IDs**. Capabilities are
+AirDriver knows **58 chipset families** spanning **1286 USB/PCI IDs**. Capabilities are
 honest — some chips connect fine but can't inject, and AirDriver tells you up front.
 (Run `airdriver db` for the full list, or the **📚 Chipsets** browser in the GUI.)
 
 > **Where the IDs come from.** Every `vid:pid` is taken from the Linux kernel's own driver
 > device tables (`rtl8xxxu`, `rt2800usb`, `ath9k_htc`, `carl9170`, `mt76*`, `rtw88`/`rtw89`,
-> `rtl8187`) and, for out-of-tree drivers, the maintainers' `supported-device-IDs` lists.
-> None are guessed — a wrong id installs the wrong driver.
+> `rtl8187`, `ath5k`, `ath11k`, `ath12k`, `rsi`, `p54`, `zd1211rw`) and, for out-of-tree
+> drivers, the maintainers' `supported-device-IDs` lists. **None are guessed** — a wrong id
+> installs the wrong driver, and the install blacklists the right one's module, so a bad
+> guess leaves the adapter with no driver at all. Where two drivers claim the same id, it
+> goes in `contested_ids` and AirDriver explains instead of choosing.
 
 ### 🏆 Attack-grade — reliable monitor mode + injection
 
@@ -468,6 +568,10 @@ honest — some chips connect fine but can't inject, and AirDriver tells you up 
 | RTL8723AU | older WiFi+BT combo — connectivity only |
 | RTL8192FU | newer budget 2.4 GHz — needs kernel **6.2+** for the in-kernel driver |
 | MT7601U | ultra-cheap nano — monitor sniffing only, **no injection** |
+| RTL8822CU / RTL8822CS | AC1200 dongles & SBC modules — in-kernel `rtw88_8822cu` (6.2+), sniffs, injection unproven |
+| RTL8723DU | budget WiFi+BT combo — in-kernel `rtw88_8723du` (6.2+), connectivity |
+| MT7663U / MT7668AU | LG & generic AC dongles — in-kernel `mt7663u` (5.8+) + firmware |
+| RS9113 / RS9116 | Redpine/Silicon Labs embedded dual-band N — in-kernel `rsi_91x` + firmware |
 | AR9170 (carl9170) | legacy draft-N — weak injection |
 | AR5523 (USB) | legacy a/b/g USB — monitor works, injection **unproven** (flagged unknown, not promised) |
 
@@ -492,6 +596,8 @@ the [attack-grade](#-attack-grade--reliable-monitor-mode--injection) list instea
 | **Qualcomm QCA6390 / WCN6855** | 2021+ Dell/Lenovo/HP, Killer AX1675 | `ath11k` | ❌ **cannot** | ❌ |
 | Qualcomm QCN9074 | AP/enterprise M.2 | `ath11k` (5.13+) | ✅ | ❓ unproven |
 | Qualcomm WCN7850 (WiFi 7) | 2024+ laptops, FastConnect 7800 | `ath12k` (6.3+) | ✅ | ❓ unproven |
+| MediaTek MT7915 / MT7916 | AP-class miniPCIe / M.2 cards | `mt7915e` (5.11+) | ✅ | ❓ unproven |
+| MediaTek MT7996 / MT7992 (WiFi 7) | Wi-Fi 7 M.2 modules — needs a recent kernel | `mt7996e` | ✅ | ❓ unproven |
 | Intel 1000–6000 / Centrino-N | 2009–2013 laptops | `iwlwifi` | ✅ | ❌ |
 | **Atheros AR5xxx** | pre-2008 miniPCI, Ubiquiti SR-series | `ath5k` (in-kernel) | ✅ | 🏆 **good** |
 | **Broadcom BCM43xx** | MacBooks, DW1550, BCM43142 | `broadcom-sta-dkms` (`wl`) | ❌ | ❌ |
@@ -603,19 +709,33 @@ test-suite enforce that, so run it before opening a PR.
 
 ## Development & tests
 
-The core + CLI are pure standard library, so the tests need **no dependencies**:
+The core and the CLI are **pure standard library**, so the suite needs no dependencies —
+which is the point: AirDriver has to run on a box that cannot reach the internet yet.
 
 ```bash
-python -m airdriver db --check           # validate the chipset database
-python -m unittest discover -s tests -v  # run the suite (DB, detector, installer, CLI)
+python -m unittest discover -s tests -v    # 145 tests
+python -m airdriver db --check             # validate the chipset database
+python3 scripts/fmt_chipsets.py --check    # is the database formatted?
 ```
 
-Both run in [CI](../../actions) on every push across Python 3.9–3.13, plus a headless
-PySide6 GUI import smoke-test. To regenerate the GUI screenshots after a UI change:
+Everything runs in [CI](../../actions) on every push across **Python 3.9–3.13** (3.9 is
+what Kali and Parrot ship, so it is not optional), plus a headless PySide6 job.
+
+A note on the GUI tests, because this trap costs hours: **an exception raised inside a Qt
+slot never reaches the caller.** Qt catches it, prints it to stderr and carries on — so a
+panel that blew up half-way through drawing still "renders", and the test that built the
+window still passes. `tests/test_gui_smoke.py` therefore installs a collecting
+`sys.excepthook`, spins the real event loop, and *asserts nothing was raised*.
 
 ```bash
-QT_QPA_PLATFORM=offscreen python scripts/gen_screenshots.py
+QT_QPA_PLATFORM=offscreen python scripts/gen_screenshots.py   # refresh the screenshots
+python3 scripts/gen_site.py                                   # regenerate the Pages site
+python3 scripts/fmt_chipsets.py                               # reformat chipsets.json
 ```
+
+`chipsets.json` is written by `scripts/fmt_chipsets.py`, not by `json.dump`. Get the
+formatting wrong and a one-line change arrives as a 1 200-line diff that nobody can
+review, so the formatter is in the repo and CI checks it.
 
 ## ⚠️ Responsible use
 
@@ -629,51 +749,85 @@ responsible for staying within the law and your rules of engagement.
 ```
 AirDriver/
 ├── airdriver/
-│   ├── core/            # detection, database, system probes, install engine
-│   │   ├── chipset_db.py    detector.py   system.py    verify.py
-│   │   ├── installer.py     monitor.py    modules.py   report.py
-│   │   └── manage.py        # status · rebuild · sign · modeswitch · recommend
-│   ├── data/chipsets.json   # the chipset → driver database (52 families)
-│   ├── data/drivers/        # offline driver bundle (populated by script)
-│   ├── gui/             # PySide6 app (theme, main window)
-│   └── cli.py           # full-featured command line
-├── tests/               # stdlib unittest suite (DB, detector, installer, CLI)
-├── scripts/             # fetch_offline_drivers.sh · gen_screenshots.py
-├── .github/workflows/   # CI (tests + GUI smoke, py3.9–3.13)
-├── install.sh           # full system installer
-├── run.sh               # zero-install quick launcher
-└── Makefile             # convenience targets
+│   ├── core/                 # detection, database, system probes, install engine
+│   │   ├── chipset_db.py     # the database + its safety gate
+│   │   ├── detector.py       # sysfs enumeration & interface correlation
+│   │   ├── installer.py      # plan building and execution
+│   │   ├── setup.py          # the one-command flow (pure decision logic)
+│   │   ├── verify.py         # "did it really bind?" — the honest verdict
+│   │   ├── manage.py         # status · rebuild · sign · modeswitch · recommend
+│   │   └── diagnose.py       # the one-shot shareable snapshot
+│   ├── data/chipsets.json    # the chipset → driver database (58 families)
+│   ├── data/drivers/         # offline driver bundle (populated by script)
+│   ├── gui/                  # PySide6 app (theme, painted icons, main window)
+│   └── cli.py                # full-featured command line
+├── tests/                    # 145 stdlib unittest tests, incl. GUI + security
+├── scripts/                  # fetch_offline_drivers · gen_screenshots · gen_site
+│   └── fmt_chipsets.py       # the database formatter CI checks
+├── .github/workflows/        # CI (tests + GUI, py3.9–3.13)
+├── install.sh                # full system installer
+├── run.sh                    # zero-install quick launcher
+└── Makefile                  # convenience targets
 ```
 
-## Roadmap ideas
+## What's new
+
+**v1.0.0 "Clear Signal"** — the first stable release, and a security pass over everything
+that runs as root.
+
+- **The database can no longer execute.** Its values are interpolated into root commands,
+  so the file is a program, not data. It was validated at review time (`db --check` in CI)
+  but *not* at load, and `airdriver fix` pasted a module name into a root shell unquoted.
+  Now every value is re-checked when the file is read and anything unsafe is **dropped**
+  rather than run, with the drop reported out loud.
+- **A malicious USB descriptor can no longer make the GUI fetch a URL.** A `QLabel` in its
+  default mode reads a string containing tags as *rich text* — so a device reporting
+  `<img src="http://…">` as its product name made Qt request that URL. Device-reported text
+  is now pinned to plain text and every database value is escaped. There is a test.
+- **Seven contested `vid:pid`s** are no longer guessed at, and one real mis-assignment is
+  fixed: `1740:0605` was offered an Atheros driver for a Ralink device.
+- **Six new chipset families** — RTL8822CU, RTL8723DU, MT7663U, MT7915/MT7916,
+  MT7996/MT7992 (Wi-Fi 7) and Redpine RS9113/RS9116 — taking the database to
+  **58 families / 1286 IDs**, cross-checked against the kernel's own device tables.
+- **Injection-grade chipsets prefer the out-of-tree driver again.** `rtw88` gained
+  in-kernel RTL8812AU/8814AU support, which made AirDriver skip the build and quietly hand
+  pentesters the weaker driver. `--prefer-kernel` if you only want to get online.
+- **A GUI that says what is happening** — a verdict strip, a real progress bar driven by
+  the install steps, a colour-coded log, adapters ranked with the most capable flagged,
+  a spec grid instead of a paragraph, and keyboard shortcuts.
+- **It no longer aborts if you close it mid-install**, hangs forever on a stuck build, or
+  crashes on `setup <usb_id>` for an adapter that is plugged in but unrecognised.
+
+Earlier highlights: **v0.9.0 "One Command"** added `airdriver setup`; **v0.8.0 "Wider Net"**
+grounded every capability flag in kernel source (which is how QCA6390/WCN6855 came to be
+marked as unable to sniff at all); **v0.7.0 "Ground Truth"** rewrote detection to read
+sysfs directly, after a missing `lsusb` was found to make AirDriver invent three adapters
+on real hardware. Full history in the [CHANGELOG](CHANGELOG.md).
+
+## Roadmap
 
 - Per-adapter TX-power / regulatory region tweaks
 - Bootable USB persistence profile
 - AppImage / `.deb` packaging
+- More chipsets — [open an issue](../../issues/new) with your `vid:pid` and it gets added
 
-Recently shipped in **v0.9.0 "One Command"**: **`airdriver setup`** — the whole job in a
-single run (detect → install → verify → monitor mode → injection test) with one honest
-verdict at the end, mirrored by the GUI's **Get me ready** button. Monitor mode is read
-back from sysfs rather than trusted from `airmon-ng`'s exit code, and a chipset that
-cannot inject is never reported as a failed install. 17 new tests (**125** total).
-Before that, **v0.8.0 "Wider Net"**: **12 new chipset families (+400 IDs)** taking
-the database to **52 families / 1258 IDs** — Qualcomm `ath11k`/`ath12k`, Broadcom
-`brcmfmac`, Intel Centrino-N, and the classic `ath5k`/`rt73usb`/`zd1211rw`/`p54usb`
-injection chipsets. Capability flags are now read out of the kernel source rather than
-asserted, which is how **QCA6390/WCN6855 are marked as unable to sniff at all**
-(`supports_monitor = false` in ath11k's own table) while WCN7850 is marked as able.
-Before that, **v0.7.0 "Ground Truth"**: detection rewritten to read **sysfs
-directly** — a missing `lsusb` used to make AirDriver fall back to *demo mode* and
-present three fabricated adapters on real hardware; wireless interfaces are now matched
-to adapters **by sysfs device path** instead of being handed to the first PCI card, which
-is what made the wrong adapter show as "Working"; and Ethernet NICs, Bluetooth radios and
-root hubs are filtered out by device class.
-Before that, **v0.6.0 "Clean Sweep"**: **8 new internal-card families** (`ath9k`,
-`ath10k`, Intel 7260–BE200, `rtw89`, `rtlwifi`, MediaTek PCIe, Broadcom) taking the
-database to **40 families / 858 IDs**; a fix for `airdriver remove` **silently removing
-nothing**; `remove --all` and a real `uninstall.sh`; and resolution-independent icons.
-See the [CHANGELOG](CHANGELOG.md).
+## Contributing
+
+The database only gets better if the adapters it does not know come back. If AirDriver
+shrugs at your dongle, `airdriver contribute` writes the whole report for you — one link,
+30 seconds, and the next person's adapter just works. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+Found a security issue? [SECURITY.md](SECURITY.md).
 
 ## License
 
 MIT © [at0m-b0mb](https://github.com/at0m-b0mb)
+
+<div align="center">
+<br/>
+
+**If AirDriver saved you an evening, a ⭐ helps someone else find it.**
+
+<sub>Built for people who just want monitor mode to work.</sub>
+
+</div>

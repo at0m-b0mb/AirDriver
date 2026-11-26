@@ -56,6 +56,22 @@ def stylesheet() -> str:
     QLabel#Warn {{ color: {WARN}; font-weight: 600; }}
     QLabel#Danger {{ color: {DANGER}; font-weight: 600; }}
 
+    /* ---- spec grid ---------------------------------------------------- */
+    QFrame#Spec {{
+        background: {PANEL}; border: 1px solid {BORDER}; border-radius: 11px;
+    }}
+    QLabel#SpecKey {{
+        color: {DIM}; font-size: 11px; font-weight: 700;
+        letter-spacing: 0.6px; text-transform: uppercase;
+    }}
+
+    /* The "this is the one to use" flag on the top adapter card. */
+    QLabel#Flag {{
+        background: {ACCENT_SOFT}; color: {ACCENT};
+        border: 1px solid {ACCENT}; border-radius: 8px;
+        padding: 1px 7px; font-size: 9px; font-weight: 800; letter-spacing: 1px;
+    }}
+
     QLabel#Pill {{
         background: {PANEL_HI}; color: {DIM};
         border: 1px solid {BORDER}; border-radius: 10px;
@@ -84,6 +100,45 @@ def stylesheet() -> str:
         border: 1px solid {BORDER}; border-radius: 11px;
     }}
     QFrame#Footer {{ background: {BG}; border-top: 1px solid {BORDER}; }}
+
+    /* ---- verdict strip ----------------------------------------------- */
+    /* One line at the top of the detail pane answering "is this adapter
+       ready?". The left edge carries the colour, so the answer is legible
+       from across the room without reading the words. */
+    QFrame#Verdict {{
+        background: {PANEL}; border: 1px solid {BORDER};
+        border-left: 3px solid {BORDER_HI}; border-radius: 11px;
+    }}
+    QFrame#Verdict[tone="good"] {{
+        border-left: 3px solid {GOOD};
+        background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+            stop:0 rgba(63, 185, 80, 0.14), stop:0.5 {PANEL}, stop:1 {PANEL});
+    }}
+    QFrame#Verdict[tone="warn"] {{
+        border-left: 3px solid {WARN};
+        background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+            stop:0 rgba(245, 166, 35, 0.14), stop:0.5 {PANEL}, stop:1 {PANEL});
+    }}
+    QFrame#Verdict[tone="bad"] {{
+        border-left: 3px solid {DANGER};
+        background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+            stop:0 {DANGER_SOFT}, stop:0.5 {PANEL}, stop:1 {PANEL});
+    }}
+    QFrame#Verdict[tone="busy"] {{
+        border-left: 3px solid {CYAN};
+        background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+            stop:0 rgba(56, 189, 248, 0.14), stop:0.5 {PANEL}, stop:1 {PANEL});
+    }}
+
+    /* ---- progress ---------------------------------------------------- */
+    QProgressBar#Progress {{
+        background: {BG_LOG}; border: 1px solid {BORDER}; border-radius: 3px;
+    }}
+    QProgressBar#Progress::chunk {{
+        border-radius: 3px;
+        background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+            stop:0 {ACCENT_DK}, stop:1 {ACCENT});
+    }}
 
     /* ---- buttons ----------------------------------------------------- */
     QPushButton {{

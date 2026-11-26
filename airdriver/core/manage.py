@@ -365,11 +365,15 @@ def build_sign_plan(info: SystemInfo) -> InstallPlan:
             f'if [ -f {MOK_CRT} ] && [ -f {MOK_KEY} ]; then\n'
             f'  echo "[airdriver] reusing the existing signing key at {MOK_CRT}"\n'
             f'else\n'
-            f'  echo "[airdriver] generating a new 2048-bit signing key"\n'
-            f'  sudo openssl req -new -x509 -newkey rsa:2048 -nodes -days 36500 \\\n'
-            f'      -subj "/CN=AirDriver module signing key/" \\\n'
-            f'      -keyout {MOK_KEY} -outform DER -out {MOK_CRT}\n'
+            f'  echo "[airdriver] generating a new 4096-bit signing key"\n'
+            # umask first: openssl creates the key with the process umask, so a
+            # chmod afterwards leaves a window in which the private half of a
+            # module-signing key is world-readable. Narrow it to nothing.
+            f'  sudo sh -c \'umask 077; openssl req -new -x509 -newkey rsa:4096 '
+            f'-nodes -days 36500 -subj "/CN=AirDriver module signing key/" '
+            f'-keyout {MOK_KEY} -outform DER -out {MOK_CRT}\'\n'
             f'  sudo chmod 600 {MOK_KEY}\n'
+            f'  sudo chmod 644 {MOK_CRT}\n'
             f'fi')))
     plan.steps.append(Step(
         title="Sign every DKMS module built for the running kernel",

@@ -8,10 +8,15 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from importlib import resources
 from pathlib import Path
 from typing import Optional
+
+
+class DatabaseError(RuntimeError):
+    """The chipset database is missing, unreadable, or not a database."""
+
 
 # --------------------------------------------------------------------------- #
 # What a database value is allowed to contain                                 #
@@ -95,6 +100,15 @@ class KernelNative:
     recommended_kernel: str = ""
     firmware: Optional[str] = None
 
+    @classmethod
+    def from_dict(cls, d: dict) -> "KernelNative":
+        # Only the fields we know about: a database that grows a new key must
+        # not stop the whole tool from loading with a TypeError.
+        return cls(module=str(d.get("module", "")),
+                   min_kernel=str(d.get("min_kernel", "0")),
+                   recommended_kernel=str(d.get("recommended_kernel", "")),
+                   firmware=d.get("firmware"))
+
 
 @dataclass(frozen=True)
 class Chipset:
@@ -112,6 +126,11 @@ class Chipset:
     drivers: tuple[DriverOption, ...]
     blacklist: tuple[str, ...]
     kernel_native: Optional[KernelNative] = None
+    #: True when an in-kernel driver exists but the out-of-tree one is what has
+    #: the injection track record. Without it, the mere existence of
+    #: ``kernel_native`` makes AirDriver skip the build — the right call for a
+    #: laptop card and the wrong one for an injection adapter.
+    prefer_out_of_tree: bool = False
 
     @property
     def capability_summary(self) -> str:
@@ -136,22 +155,89 @@ class Chipset:
             injection=bool(d.get("injection", False)),
             injection_quality=d.get("injection_quality", "unknown"),
             notes=d.get("notes", ""),
+            prefer_out_of_tree=bool(d.get("prefer_out_of_tree", False)),
             adapters=tuple(d.get("adapters", ())),
             usb_ids=tuple(s.lower() for s in d.get("usb_ids", ())),
             drivers=tuple(DriverOption.from_dict(x) for x in d.get("drivers", ())),
             blacklist=tuple(d.get("blacklist", ())),
-            kernel_native=KernelNative(**kn) if kn else None,
+            kernel_native=KernelNative.from_dict(kn) if kn else None,
         )
 
 
+# --------------------------------------------------------------------------- #
+# Load-time quarantine                                                        #
+# --------------------------------------------------------------------------- #
+# `problems()` is the *review* gate: it runs in CI, so a pull request carrying a
+# shell metacharacter never merges. It is not a *runtime* gate, because nothing
+# called it before the values were used — and the database on disk is a plain
+# JSON file that anything with write access to the install can edit, that a user
+# may hand-edit to add their own adapter, and that `--db` can point elsewhere.
+#
+# So the same rules are applied again at load, and anything that fails them is
+# dropped rather than handed to a root shell. Dropping (not refusing the whole
+# file) is deliberate: one malformed entry must not take Wi-Fi away from a
+# machine that has no other way to get online. Every drop is recorded in
+# ``load_warnings`` so `airdriver doctor`, `db --check` and the GUI can say so
+# out loud instead of silently doing less than the file asked for.
+def sanitize(chipsets: list[Chipset]) -> tuple[list[Chipset], list[str]]:
+    """Return (chipsets with every unsafe value removed, warnings)."""
+    warnings: list[str] = []
+    out: list[Chipset] = []
+    for c in chipsets:
+        changed = False
+
+        blacklist = tuple(m for m in c.blacklist if SAFE_MODULE.match(m or ""))
+        if len(blacklist) != len(c.blacklist):
+            warnings.append(f"{c.id}: dropped unsafe blacklist entry")
+            changed = True
+
+        kn = c.kernel_native
+        if kn is not None and not SAFE_MODULE.match(kn.module or ""):
+            warnings.append(f"{c.id}: dropped unsafe kernel_native module {kn.module!r}")
+            kn = None
+            changed = True
+
+        drivers = []
+        for d in c.drivers:
+            bad = None
+            if d.module and not SAFE_MODULE.match(d.module):
+                bad = f"module {d.module!r}"
+            elif d.package and not SAFE_PACKAGE.match(d.package):
+                bad = f"apt package {d.package!r}"
+            elif d.firmware_pkg and not SAFE_PACKAGE.match(d.firmware_pkg):
+                bad = f"firmware package {d.firmware_pkg!r}"
+            elif d.repo and not SAFE_REPO.match(d.repo):
+                bad = f"repo {d.repo!r}"
+            elif d.path and not _safe_rel_path(d.path):
+                bad = f"offline path {d.path!r}"
+            if bad is None:
+                drivers.append(d)
+            else:
+                warnings.append(f"{c.id}: dropped driver option with unsafe {bad}")
+                changed = True
+
+        out.append(replace(c, blacklist=blacklist, kernel_native=kn,
+                           drivers=tuple(drivers)) if changed else c)
+    return out, warnings
+
+
 class ChipsetDB:
-    def __init__(self, chipsets: list[Chipset], meta: dict):
+    def __init__(self, chipsets: list[Chipset], meta: dict,
+                 load_warnings: Optional[list[str]] = None,
+                 raw_chipsets: Optional[list[Chipset]] = None):
         self._chipsets = chipsets
         self._by_usb: dict[str, Chipset] = {}
         for c in chipsets:
             for uid in c.usb_ids:
                 self._by_usb[uid] = c
         self.meta = meta
+        #: Values the loader refused to pass on (see ``sanitize``). Empty for
+        #: the shipped database — a non-empty list means the file was edited.
+        self.load_warnings: list[str] = list(load_warnings or ())
+        #: The entries exactly as the file spelled them, before the loader
+        #: dropped anything. `problems()` checks these, so `db --check` still
+        #: reports a value that the runtime quietly refused to use.
+        self._for_check: list[Chipset] = list(raw_chipsets or chipsets)
 
     # ---- queries -----------------------------------------------------------
     def all(self) -> list[Chipset]:
@@ -159,6 +245,19 @@ class ChipsetDB:
 
     def match_usb(self, usb_id: str) -> Optional[Chipset]:
         return self._by_usb.get(usb_id.lower().strip())
+
+    def contested(self, usb_id: str) -> Optional[dict]:
+        """Why this ``vid:pid`` is deliberately *not* in any chipset.
+
+        Some ids are claimed by two or more kernel drivers, because two
+        different chips shipped behind the same id. Guessing is the worst
+        option available: the install blacklists the other driver's module, so
+        a wrong guess leaves the adapter with no driver at all. These ids are
+        therefore absent from every family, and this is the explanation that
+        gets shown instead of a bare "unknown".
+        """
+        entry = (self.meta.get("contested_ids") or {}).get(usb_id.lower().strip())
+        return entry if isinstance(entry, dict) else None
 
     def get(self, chipset_id: str) -> Optional[Chipset]:
         return next((c for c in self._chipsets if c.id == chipset_id), None)
@@ -188,7 +287,7 @@ class ChipsetDB:
         # carrying shell metacharacters is rejected at review time rather than
         # executed on a user's machine. (Call sites also shlex-quote these, so a
         # hand-edited database still can't break out; this stops it earlier.)
-        for c in self._chipsets:
+        for c in self._for_check:
             for m in c.blacklist:
                 if not SAFE_MODULE.match(m or ""):
                     out.append(f"{c.id}: unsafe blacklist module {m!r} "
@@ -213,7 +312,7 @@ class ChipsetDB:
 
         # Unique chipset ids.
         seen_cid: dict[str, int] = {}
-        for c in self._chipsets:
+        for c in self._for_check:
             seen_cid[c.id] = seen_cid.get(c.id, 0) + 1
         for cid, n in seen_cid.items():
             if n > 1:
@@ -222,7 +321,7 @@ class ChipsetDB:
         # Every usb_id must be unique across the whole file, else lookups are
         # ambiguous and the last-loaded chipset silently wins.
         owner: dict[str, str] = {}
-        for c in self._chipsets:
+        for c in self._for_check:
             for uid in c.usb_ids:
                 if not _id_re.match(uid):
                     out.append(f"{c.id}: malformed usb_id '{uid}' (want lowercase vid:pid)")
@@ -231,7 +330,7 @@ class ChipsetDB:
                 owner[uid] = c.id
 
         # Driver options must be sane and priorities unique within a chipset.
-        for c in self._chipsets:
+        for c in self._for_check:
             if not c.drivers:
                 out.append(f"{c.id}: no driver options")
             prios: dict[int, int] = {}
@@ -253,11 +352,30 @@ class ChipsetDB:
 
     # ---- loading -----------------------------------------------------------
     @classmethod
-    def load(cls, path: Optional[Path] = None) -> "ChipsetDB":
-        if path is not None:
-            raw = json.loads(Path(path).read_text())
-        else:
-            raw = json.loads(data_path("chipsets.json").read_text())
-        chipsets = [Chipset.from_dict(c) for c in raw.get("chipsets", [])]
+    def load(cls, path: Optional[Path] = None, *, strict: bool = False) -> "ChipsetDB":
+        """Load the database, dropping any value that is not safe to execute.
+
+        ``strict=True`` raises instead of dropping — used by the test-suite and
+        by ``db --check`` so a problem is loud at review time.
+        """
+        src = Path(path) if path is not None else data_path("chipsets.json")
+        try:
+            raw = json.loads(src.read_text())
+        except FileNotFoundError:
+            raise DatabaseError(f"chipset database not found at {src}") from None
+        except (OSError, UnicodeDecodeError) as exc:
+            raise DatabaseError(f"could not read {src}: {exc}") from None
+        except json.JSONDecodeError as exc:
+            raise DatabaseError(f"{src} is not valid JSON: {exc}") from None
+        if not isinstance(raw, dict) or not isinstance(raw.get("chipsets", []), list):
+            raise DatabaseError(f"{src} is not an AirDriver chipset database")
+        try:
+            chipsets = [Chipset.from_dict(c) for c in raw.get("chipsets", [])]
+        except (KeyError, TypeError, ValueError) as exc:
+            raise DatabaseError(f"{src} has a malformed chipset entry: {exc}") from None
         meta = {k: v for k, v in raw.items() if k != "chipsets"}
-        return cls(chipsets, meta)
+        clean, warnings = sanitize(chipsets)
+        if warnings and strict:
+            raise DatabaseError("unsafe values in the chipset database: "
+                                + "; ".join(warnings))
+        return cls(clean, meta, warnings, raw_chipsets=chipsets)

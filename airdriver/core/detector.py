@@ -97,8 +97,22 @@ class Adapter:
         return self.chipset is not None
 
     @property
+    def bound_interface(self) -> Optional[WirelessInterface]:
+        """The interface this adapter actually owns, if a driver really bound.
+
+        An interface object alone is not proof: a placeholder with no real
+        device name behind it means "no driver", and reporting that as
+        "Working" is exactly the dishonesty this tool exists to avoid.
+        """
+        iface = self.interface
+        if iface is None or not iface.name or iface.name.startswith("("):
+            return None
+        return iface
+
+    @property
     def driver_loaded(self) -> bool:
-        return bool(self.interface and self.interface.driver)
+        iface = self.bound_interface
+        return bool(iface and iface.driver)
 
     @property
     def title(self) -> str:
@@ -108,8 +122,9 @@ class Adapter:
 
     @property
     def status(self) -> str:
-        if self.interface and self.interface.name:
-            return f"Working — {self.interface.name} ({self.interface.driver or 'driver?'})"
+        iface = self.bound_interface
+        if iface is not None:
+            return f"Working — {iface.name} ({iface.driver or 'driver?'})"
         if self.chipset and self.chipset.kernel_native:
             return "Recognized — driver may be in-kernel (verify)"
         if self.chipset:
@@ -398,8 +413,6 @@ def _demo_adapters(db: ChipsetDB) -> list[Adapter]:
         chip = db.match_usb(f"{vid}:{pid}")
         a = Adapter(bus=bus, device=dev, vid=vid, pid=pid, description=desc,
                     chipset=chip, is_demo=True)
-        if chip and chip.id == "rtl8812au":
-            a.interface = WirelessInterface(name="(not bound)", driver="", mode="")
         out.append(a)
     return out
 

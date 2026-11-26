@@ -4,15 +4,22 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "airdriver"
-version = "0.9.1"
+version = "1.0.0"
 description = "WiFi adapter driver auto-installer for Kali Linux & Parrot OS (with GUI)"
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
 authors = [{ name = "at0m-b0mb" }]
-keywords = ["wifi", "driver", "kali", "parrot", "pentest", "monitor-mode", "dkms", "realtek", "atheros", "mediatek"]
+keywords = ["wifi", "driver", "kali-linux", "parrot-os", "pentest", "monitor-mode",
+            "packet-injection", "dkms", "realtek", "atheros", "mediatek", "aircrack-ng",
+            "wifi-adapter", "wireless", "security-tools"]
 classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
     "Environment :: X11 Applications :: Qt",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Security",
+    "Topic :: System :: Networking",
     "Intended Audience :: System Administrators",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
@@ -23,6 +30,13 @@ dependencies = []
 
 [project.optional-dependencies]
 gui = ["PySide6>=6.5"]
+
+[project.urls]
+Homepage = "https://github.com/at0m-b0mb/AirDriver"
+Documentation = "https://at0m-b0mb.github.io/AirDriver/"
+Source = "https://github.com/at0m-b0mb/AirDriver"
+Issues = "https://github.com/at0m-b0mb/AirDriver/issues"
+Changelog = "https://github.com/at0m-b0mb/AirDriver/blob/main/CHANGELOG.md"
 
 [project.scripts]
 airdriver = "airdriver.cli:main"

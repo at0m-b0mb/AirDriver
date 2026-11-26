@@ -13,12 +13,16 @@ Long operations (scan, install) run on worker threads so the UI never freezes.
 
 from __future__ import annotations
 
+import re
+from html import escape as _esc
+
 from PySide6.QtCore import Qt, QThread, QObject, Signal, QSize, QUrl, QRectF, QTimer
-from PySide6.QtGui import QDesktopServices, QPixmap, QPainter, QPen, QColor, QIcon
+from PySide6.QtGui import (QDesktopServices, QKeySequence, QPixmap, QPainter, QPen,
+                           QColor, QIcon, QShortcut)
 from PySide6.QtWidgets import (
-    QApplication, QCheckBox, QComboBox, QDialog, QFrame, QHBoxLayout, QLabel,
-    QLineEdit, QMainWindow, QMessageBox, QPlainTextEdit, QPushButton, QScrollArea,
-    QTextBrowser, QVBoxLayout, QWidget,
+    QApplication, QCheckBox, QComboBox, QDialog, QFrame, QGridLayout, QHBoxLayout,
+    QLabel, QLineEdit, QMainWindow, QMessageBox, QPlainTextEdit, QProgressBar,
+    QPushButton, QScrollArea, QSizePolicy, QTextBrowser, QVBoxLayout, QWidget,
 )
 
 from .. import __version__, __codename__
@@ -178,6 +182,9 @@ class SetupWorker(QObject):
 def _chip(text: str, colour: str | None = None, tip: str = "") -> QLabel:
     lab = QLabel(text)
     lab.setObjectName("Pill")
+    # Pills carry values read off the system (distro name, kernel release), so
+    # they are never interpreted as markup.
+    lab.setTextFormat(Qt.PlainText)
     if colour:
         lab.setStyleSheet(f"#Pill{{color:{colour};border-color:{colour};}}")
     if tip:
@@ -185,10 +192,49 @@ def _chip(text: str, colour: str | None = None, tip: str = "") -> QLabel:
     return lab
 
 
+def _meter(filled: int, total: int = 4, colour: str = T.ACCENT) -> QLabel:
+    """A four-segment bar for injection quality.
+
+    "fair" and "excellent" are words that look identical when skimming a list
+    of adapters; a bar is read at a glance, which is the whole point of a list
+    of adapters you are choosing between.
+    """
+    lab = QLabel("".join("█" if i < filled else "─" for i in range(total)))
+    lab.setTextFormat(Qt.PlainText)
+    lab.setStyleSheet(f"color:{colour if filled else T.DIM};"
+                      "letter-spacing:1px;font-size:11px;")
+    return lab
+
+
+QUALITY_RANK = {"excellent": 4, "good": 3, "fair": 2, "poor": 1, "unknown": 0}
+
+#: Database method names, in words a user recognises.
+_METHOD_WORDS = {
+    "kernel_native": "in-kernel (no build)",
+    "apt": "apt package",
+    "dkms_git": "DKMS build from source",
+    "offline": "bundled source (offline)",
+}
+
+
+#: How a log line is coloured. First match wins; everything else inherits the
+#: console's own colour. The log is the main thing on screen during an install,
+#: and a wall of identical grey makes the one line that matters — the failure —
+#: as easy to miss as the 200 that do not.
+_LOG_COLOURS = (
+    ("✗", T.DANGER),
+    ("[!]", T.WARN),
+    ("✓", T.GOOD),
+    ("===", T.ACCENT),
+    ("[airdriver]", T.CYAN),
+)
+_STEP_RE = re.compile(r"^\[(\d+)/(\d+)\]")
+
+
 class AdapterCard(QFrame):
     clicked = Signal(object)  # emits the Adapter
 
-    def __init__(self, adapter: Adapter):
+    def __init__(self, adapter: Adapter, best: bool = False):
         super().__init__()
         self.adapter = adapter
         self.setObjectName("Card")
@@ -204,18 +250,28 @@ class AdapterCard(QFrame):
         dot.setFixedWidth(16)
         title = QLabel(adapter.title)
         title.setObjectName("H2")
+        title.setTextFormat(Qt.PlainText)
         title.setWordWrap(True)
         top.addWidget(dot, 0)
         top.addWidget(title, 1)
+        if best:
+            flag = QLabel("BEST")
+            flag.setObjectName("Flag")
+            flag.setTextFormat(Qt.PlainText)
+            flag.setToolTip("The most capable adapter plugged in right now, "
+                            "by the database's monitor/injection flags")
+            top.addWidget(flag, 0)
         lay.addLayout(top)
 
         sub = QLabel(f"{adapter.usb_id}  ·  {adapter.transport.upper()}"
                      + ("  ·  demo" if adapter.is_demo else ""))
         sub.setObjectName("Dim")
+        sub.setTextFormat(Qt.PlainText)
         lay.addWidget(sub)
 
         status = QLabel(adapter.status)
         status.setObjectName("Dim")
+        status.setTextFormat(Qt.PlainText)
         status.setWordWrap(True)
         lay.addWidget(status)
 
@@ -229,6 +285,8 @@ class AdapterCard(QFrame):
                                    T.GOOD if c.injection else T.DIM))
             badges.addWidget(_chip(c.injection_quality, T.CYAN,
                                    tip="Injection reliability"))
+            badges.addWidget(_meter(QUALITY_RANK.get(c.injection_quality, 0),
+                                    colour=T.ACCENT if c.injection else T.DIM))
             badges.addStretch(1)
             lay.addLayout(badges)
 
@@ -288,7 +346,51 @@ class MainWindow(QMainWindow):
         outer.addWidget(body, 1)
         outer.addWidget(self._build_footer())
 
+        self._install_shortcuts()
+        if self.db.load_warnings:
+            self.log_line("[!] Some values in the chipset database are not safe to "
+                          "run and were ignored:")
+            for w in self.db.load_warnings[:8]:
+                self.log_line(f"      - {w}")
+            self.log_line("    Run 'airdriver db --check' for the full list.")
         self.rescan()
+
+    # ---- keyboard ----------------------------------------------------------
+    def _install_shortcuts(self) -> None:
+        """The six things you do repeatedly, on keys.
+
+        Driver work is iterative — plug in, scan, install, verify, re-plug,
+        scan again — and reaching for the mouse each time is the difference
+        between a tool you keep open and one you close.
+        """
+        for keys, slot, label in (
+            ("Ctrl+R", self.rescan, "Rescan"),
+            ("F5", self.rescan, "Rescan"),
+            ("Ctrl+Return", self.run_setup, "Get me ready"),
+            ("Ctrl+Enter", self.run_setup, "Get me ready"),
+            ("Ctrl+I", self.install_selected, "Install driver"),
+            ("Ctrl+P", self.preview_plan, "Preview plan"),
+            ("Ctrl+K", self.verify_selected, "Verify"),
+            ("Ctrl+D", self.run_diagnose, "Diagnose"),
+            ("Ctrl+F", self.show_chipsets, "Chipsets"),
+            ("Ctrl+L", self.clear_log, "Clear log"),
+            ("Ctrl+Shift+C", self.copy_log, "Copy log"),
+            ("F1", self.show_help, "Help"),
+            ("Ctrl+Q", self.close, "Quit"),
+        ):
+            QShortcut(QKeySequence(keys), self, activated=slot)
+        # Say so in the tooltips, so the shortcuts are discoverable rather than
+        # a secret for whoever reads the source.
+        for btn, keys in ((self.btn_rescan, "Ctrl+R"), (self.btn_setup, "Ctrl+Return"),
+                          (self.btn_install, "Ctrl+I"), (self.btn_plan, "Ctrl+P"),
+                          (self.btn_verify, "Ctrl+K"), (self.btn_diag, "Ctrl+D"),
+                          (self.btn_chips, "Ctrl+F"), (self.btn_help, "F1"),
+                          (self.btn_copylog, "Ctrl+Shift+C")):
+            tip = btn.toolTip()
+            btn.setToolTip(f"{tip}  ({keys})" if tip else keys)
+
+    def clear_log(self) -> None:
+        self.log.clear()
 
     # ---- footer ------------------------------------------------------------
     def _build_footer(self) -> QWidget:
@@ -296,8 +398,8 @@ class MainWindow(QMainWindow):
         f.setObjectName("Footer")
         lay = QHBoxLayout(f)
         lay.setContentsMargins(18, 8, 18, 8)
-        tip = QLabel("Tip: pick an adapter and press Get me ready — it installs, verifies, "
-                     "and tests injection. Tick Dry run to preview safely.")
+        tip = QLabel("Pick an adapter and press Get me ready (Ctrl+Return) — it installs, "
+                     "verifies and tests injection. Ctrl+R rescans, F1 for help.")
         tip.setObjectName("Dim")
         link = QLabel(f'<a style="color:{T.CYAN};text-decoration:none" '
                       f'href="{REPO_URL}">github.com/at0m-b0mb/AirDriver</a>')
@@ -362,9 +464,9 @@ class MainWindow(QMainWindow):
         # Left: adapter list
         left = QVBoxLayout()
         left.setSpacing(8)
-        lbl = QLabel("Detected adapters")
-        lbl.setObjectName("H2")
-        left.addWidget(lbl)
+        self.adapters_lbl = QLabel("Detected adapters")
+        self.adapters_lbl.setObjectName("H2")
+        left.addWidget(self.adapters_lbl)
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
         self.cards_host = QWidget()
@@ -389,9 +491,42 @@ class MainWindow(QMainWindow):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(10)
 
+        # A one-line answer to "is this adapter ready?", at the top of the
+        # pane. It used to be findable only by reading the log, which is the
+        # wrong place for the single fact the user came here for.
+        self.verdict = QFrame()
+        self.verdict.setObjectName("Verdict")
+        self.verdict.setProperty("tone", "idle")
+        vl = QHBoxLayout(self.verdict)
+        vl.setContentsMargins(14, 11, 14, 11)
+        vl.setSpacing(10)
+        self.verdict_dot = QLabel()
+        self.verdict_dot.setFixedWidth(14)
+        self.verdict_text = QLabel("Select an adapter to begin.")
+        self.verdict_text.setObjectName("H2")
+        self.verdict_text.setTextFormat(Qt.PlainText)
+        self.verdict_text.setWordWrap(True)
+        vl.addWidget(self.verdict_dot, 0)
+        vl.addWidget(self.verdict_text, 1)
+        lay.addWidget(self.verdict)
+
         self.detail_title = QLabel("Select an adapter")
         self.detail_title.setObjectName("H2")
+        self.detail_title.setTextFormat(Qt.PlainText)
         lay.addWidget(self.detail_title)
+
+        # Specs as an aligned label/value grid. The same facts used to be one
+        # run-on rich-text paragraph, where "monitor: yes · injection: yes
+        # (good)" is read word by word; in a grid the eye goes straight down
+        # the value column.
+        self.spec_host = QFrame()
+        self.spec_host.setObjectName("Spec")
+        self.spec = QGridLayout(self.spec_host)
+        self.spec.setContentsMargins(14, 12, 14, 12)
+        self.spec.setHorizontalSpacing(16)
+        self.spec.setVerticalSpacing(7)
+        self.spec.setColumnStretch(1, 1)
+        lay.addWidget(self.spec_host)
 
         self.detail_body = QLabel("Pick an adapter on the left to see chipset "
                                   "details and the install plan.")
@@ -523,10 +658,25 @@ class MainWindow(QMainWindow):
         log_lbl = QLabel("Activity log")
         log_lbl.setObjectName("Dim")
         log_head.addWidget(log_lbl)
+        self.progress_label = QLabel("")
+        self.progress_label.setObjectName("Tag")
+        self.progress_label.setTextFormat(Qt.PlainText)
+        log_head.addWidget(self.progress_label)
         log_head.addStretch(1)
         log_head.addWidget(self.btn_copylog)
         log_head.addWidget(self.btn_report)
         lay.addLayout(log_head)
+
+        # Real progress, driven by the "[3/9]" step headers the executor logs.
+        # A DKMS build can run for minutes; a frozen-looking window during that
+        # is the single most common reason somebody kills an install half-way.
+        self.progress = QProgressBar()
+        self.progress.setObjectName("Progress")
+        self.progress.setTextVisible(False)
+        self.progress.setFixedHeight(6)
+        self.progress.setRange(0, 0)
+        self.progress.hide()
+        lay.addWidget(self.progress)
         self.log = QPlainTextEdit()
         self.log.setReadOnly(True)
         self.log.setPlaceholderText("Install output appears here…")
@@ -535,9 +685,44 @@ class MainWindow(QMainWindow):
 
     # ---- logging -----------------------------------------------------------
     def log_line(self, text: str):
-        self.log.appendPlainText(text)
+        for line in text.split("\n"):
+            self._append_log_line(line)
         sb = self.log.verticalScrollBar()
         sb.setValue(sb.maximum())
+        self._advance_progress(text)
+
+    def _append_log_line(self, line: str) -> None:
+        colour = next((c for marker, c in _LOG_COLOURS if marker in line), None)
+        if colour is None:
+            self.log.appendPlainText(line)
+            return
+        # appendHtml collapses runs of spaces, and the executor indents every
+        # line of command output by two — so the indentation is preserved
+        # explicitly rather than lost.
+        body = _esc(line.rstrip())
+        lead = len(line) - len(line.lstrip(" "))
+        self.log.appendHtml(f'<span style="color:{colour};white-space:pre">'
+                            f'{"&nbsp;" * lead}{body.lstrip()}</span>')
+
+    def _advance_progress(self, text: str) -> None:
+        for line in text.split("\n"):
+            m = _STEP_RE.match(line.strip())
+            if not m:
+                continue
+            done, total = int(m.group(1)), int(m.group(2))
+            self.progress.setRange(0, total)
+            self.progress.setValue(done)
+            self.progress_label.setText(f"step {done} of {total}")
+
+    def _set_verdict(self, text: str, tone: str = "idle") -> None:
+        """tone: good | warn | bad | busy | idle."""
+        colour = {"good": T.GOOD, "warn": T.WARN, "bad": T.DANGER,
+                  "busy": T.CYAN}.get(tone, T.DIM)
+        self.verdict_dot.setPixmap(icons.dot(colour, 12))
+        self.verdict_text.setText(text)
+        self.verdict.setProperty("tone", tone)
+        self.verdict.style().unpolish(self.verdict)
+        self.verdict.style().polish(self.verdict)
 
     # ---- worker thread lifecycle ------------------------------------------
     def _start_worker(self, worker: QObject, on_done) -> None:
@@ -564,10 +749,30 @@ class MainWindow(QMainWindow):
         self._jobs = [(t, w) for (t, w) in self._jobs if t is not thread]
 
     def closeEvent(self, event):
-        # Don't let the process exit while a worker thread is still running.
+        # A worker blocked in a DKMS build cannot be asked politely to stop:
+        # it is not in an event loop, so quit() is a no-op and the wait()
+        # always timed out — after which Qt destroyed a running QThread and
+        # aborted the process. Ask first, then stop it properly.
+        if self._installing:
+            box = QMessageBox(self)
+            box.setIcon(QMessageBox.Warning)
+            box.setWindowTitle("Still working")
+            box.setText("An install is still running.")
+            box.setInformativeText(
+                "Quitting now stops it part-way, which can leave a half-built "
+                "driver behind. Run 'airdriver verify' afterwards to see where "
+                "things stand.\n\nQuit anyway?")
+            box.setStandardButtons(QMessageBox.Discard | QMessageBox.Cancel)
+            box.setDefaultButton(QMessageBox.Cancel)
+            if box.exec() != QMessageBox.Discard:
+                event.ignore()
+                return
         for thread, _ in list(self._jobs):
             thread.quit()
-            thread.wait(5000)
+            if not thread.wait(3000):
+                # Last resort, and only on the way out of the process.
+                thread.terminate()
+                thread.wait(2000)
         super().closeEvent(event)
 
     # ---- scan --------------------------------------------------------------
@@ -585,6 +790,10 @@ class MainWindow(QMainWindow):
         self.sysinfo = info
         self.adapters = adapters
         self._render_status(info)
+        known = sum(1 for a in adapters if a.known)
+        self.adapters_lbl.setText(
+            "Detected adapters" if not adapters
+            else f"Detected adapters  ·  {len(adapters)} found, {known} recognised")
         self._render_cards(adapters)
         self._refresh_ifaces(adapters)
         self.btn_rescan.setEnabled(True)
@@ -655,13 +864,20 @@ class MainWindow(QMainWindow):
             self.cards_l.addWidget(empty)
             self.cards_l.addStretch(1)
             return
-        for a in adapters:
-            card = AdapterCard(a)
+        from ..core.setup import rank_adapters
+        ranked = rank_adapters(adapters)
+        best = ranked[0] if ranked else None
+        # Most capable first: the top card is the one that gets auto-selected,
+        # and on a laptop with an internal card plus a USB injector plugged in,
+        # the injector is what you came to set up.
+        ordered = ranked + [a for a in adapters if a not in ranked]
+        for a in ordered:
+            card = AdapterCard(a, best=(a is best and len(adapters) > 1))
             card.clicked.connect(self.select_adapter)
             self.cards_l.addWidget(card)
             self.cards.append(card)
         self.cards_l.addStretch(1)
-        self.select_adapter(adapters[0])
+        self.select_adapter(ordered[0])
 
     # ---- selection ---------------------------------------------------------
     def select_adapter(self, adapter: Adapter):
@@ -674,31 +890,112 @@ class MainWindow(QMainWindow):
         self.detail_title.setText(a.title)
         known = a.known
         self.identify_row.setVisible(not known)
+        self._set_verdict(*self._verdict_for(a))
         self.btn_setup.setEnabled(True)
         self.btn_install.setEnabled(True)
         self.btn_plan.setEnabled(True)
         self.btn_verify.setEnabled(True)
         self.btn_remove.setEnabled(True)
+        self._clear_spec()
+        # Nothing to tabulate for a device with no chipset behind it.
+        self.spec_host.setVisible(known)
         if known:
             c = a.chipset
-            drivers = " → ".join(d.method for d in c.best_drivers())
-            native = (f"in-kernel <b>{c.kernel_native.module}</b> "
-                      f"(kernel ≥ {c.kernel_native.min_kernel})") if c.kernel_native else "none"
-            self.detail_body.setText(
-                f"<b>{c.vendor}</b> · {c.wifi} · {c.band}<br>"
-                f"Monitor mode: <b style='color:{T.GOOD if c.monitor_mode else T.DANGER}'>"
-                f"{'yes' if c.monitor_mode else 'no'}</b> · "
-                f"Injection: <b style='color:{T.GOOD if c.injection else T.DANGER}'>"
-                f"{'yes' if c.injection else 'no'}</b> "
-                f"({c.injection_quality})<br>"
-                f"In-kernel driver: {native}<br>"
-                f"Driver strategy: <span style='color:{T.CYAN}'>{drivers}</span><br><br>"
-                f"<span style='color:{T.DIM}'>{c.notes}</span>")
+            self._spec_row("Chipset", f"{c.vendor} · {c.wifi}")
+            self._spec_row("Bands", c.band)
+            self._spec_row("Monitor mode", "yes" if c.monitor_mode else "no",
+                           colour=T.GOOD if c.monitor_mode else T.DANGER)
+            self._spec_row("Injection",
+                           ("yes" if c.injection else "no") + f"  ({c.injection_quality})",
+                           colour=T.GOOD if c.injection else T.DANGER,
+                           meter=QUALITY_RANK.get(c.injection_quality, 0) if c.injection else 0)
+            if c.kernel_native:
+                kn = c.kernel_native
+                extra = ("  — but the out-of-tree driver is what injects reliably"
+                         if c.prefer_out_of_tree else "")
+                self._spec_row("In-kernel", f"{kn.module} (kernel ≥ {kn.min_kernel}){extra}",
+                               colour=T.WARN if c.prefer_out_of_tree else T.TEXT)
+            else:
+                self._spec_row("In-kernel", "none — a driver has to be built",
+                               colour=T.DIM)
+            self._spec_row("Install path",
+                           "  →  ".join(_METHOD_WORDS.get(d.method, d.method)
+                                        for d in c.best_drivers()),
+                           colour=T.CYAN)
+            self.detail_body.setText(f"<span style='color:{T.DIM}'>{_esc(c.notes)}</span>")
         else:
-            self.detail_body.setText(
-                f"<span style='color:{T.WARN}'>This adapter ({a.usb_id}) isn't in the "
-                f"database yet.</span><br>Choose the closest chipset below and AirDriver "
-                f"will try its driver. Please consider reporting the USB ID so it can be added.")
+            contested = self.db.contested(a.usb_id)
+            if contested:
+                # Not "unknown" — deliberately unassigned, which is a different
+                # thing and has a different answer.
+                drivers = _esc(", ".join(contested.get("drivers", ())))
+                self.detail_body.setText(
+                    f"<span style='color:{T.WARN}'>{_esc(a.usb_id)} is claimed by two "
+                    f"different drivers</span> ({drivers}), so which chip is inside "
+                    f"depends on the hardware revision.<br><br>"
+                    f"<span style='color:{T.DIM}'>{_esc(contested.get('note', ''))}"
+                    f"</span>")
+            else:
+                self.detail_body.setText(
+                    f"<span style='color:{T.WARN}'>This adapter ({_esc(a.usb_id)}) isn\'t "
+                    f"in the database yet.</span><br>Choose the closest chipset below and "
+                    f"AirDriver will try its driver. Please consider reporting the USB ID "
+                    f"so it can be added.")
+
+    def _clear_spec(self) -> None:
+        while self.spec.count():
+            item = self.spec.takeAt(0)
+            w = item.widget()
+            if w is not None:
+                w.setParent(None)      # off-screen now, not next event loop
+                w.deleteLater()
+
+    def _spec_row(self, key: str, value: str, colour: str = T.TEXT,
+                  meter: int = 0) -> None:
+        row = self.spec.rowCount()
+        k = QLabel(key)
+        k.setObjectName("SpecKey")
+        k.setTextFormat(Qt.PlainText)
+        v = QLabel(value)
+        v.setTextFormat(Qt.PlainText)
+        v.setWordWrap(True)
+        v.setStyleSheet(f"color:{colour};font-weight:600;")
+        self.spec.addWidget(k, row, 0, Qt.AlignTop)
+        if meter:
+            cell = QWidget()
+            cell.setStyleSheet("background: transparent;")
+            cl = QHBoxLayout(cell)
+            cl.setContentsMargins(0, 0, 0, 0)
+            cl.setSpacing(8)
+            cl.addWidget(v, 0)
+            cl.addWidget(_meter(meter), 0)
+            cl.addStretch(1)
+            self.spec.addWidget(cell, row, 1)
+        else:
+            self.spec.addWidget(v, row, 1)
+
+    def _verdict_for(self, a: Adapter) -> tuple[str, str]:
+        """The one-line status for an adapter, before anything has been run."""
+        iface = a.bound_interface
+        if iface is not None:
+            mode = (iface.mode or "").lower()
+            if mode in ("monitor", "mesh"):
+                return (f"{iface.name} is in monitor mode — ready to capture.", "good")
+            return (f"Driver loaded: {iface.name} "
+                    f"({iface.driver or 'driver?'}). Press Get me ready to "
+                    "put it into monitor mode.", "good")
+        if not a.known:
+            if self.db.contested(a.usb_id):
+                return (f"{a.usb_id} is claimed by two drivers — AirDriver will not "
+                        "guess which one.", "warn")
+            return (f"{a.usb_id} is not in the database yet — identify it below, or "
+                    "report it.", "warn")
+        c = a.chipset
+        if not c.monitor_mode:
+            return (f"{c.name} cannot do monitor mode — it can get you online only.",
+                    "warn")
+        return (f"No driver bound yet. Press Get me ready to install, verify and test "
+                f"{c.name}.", "idle")
 
     # ---- install -----------------------------------------------------------
     def _resolve_target(self) -> Adapter | None:
@@ -751,8 +1048,17 @@ class MainWindow(QMainWindow):
         self._verify_after = None          # the flow does its own verification
         self.log.clear()
         self._set_busy(True)
+        self._set_verdict("Working — installing, verifying, then testing monitor "
+                          "mode and injection…", "busy")
         self.btn_setup.setText("Working…")
-        worker = SetupWorker(self.db, a.usb_id, dry)
+        # For an adapter the database knows, target the usb id so the flow acts
+        # on that exact device. For one the user has just identified by hand,
+        # target the chosen chipset id — a fresh detect inside the flow has no
+        # idea what they picked here. (`a.known` is no use: _resolve_target has
+        # already attached the chosen chipset, so it is true either way.)
+        in_db = self.db.match_usb(a.usb_id) is not None
+        target = a.usb_id if in_db else a.chipset.id
+        worker = SetupWorker(self.db, target, dry)
         worker.line.connect(self.log_line)
         self._start_worker(worker, self._on_setup_done)
 
@@ -760,6 +1066,8 @@ class MainWindow(QMainWindow):
         self._installing = False
         self._set_busy(False)
         self.btn_setup.setText("Get me ready")
+        self._set_verdict(out.headline,
+                          "good" if out.ready else ("warn" if out.connected else "bad"))
         self.log_line(setup_flow.describe(out))
 
         box = QMessageBox(self)
@@ -797,6 +1105,7 @@ class MainWindow(QMainWindow):
         self._installing = True
         self.log.clear()
         self._set_busy(True)
+        self._set_verdict("Installing the driver…", "busy")
         worker = InstallWorker(plan, self.sysinfo, dry)
         worker.line.connect(self.log_line)
         self._start_worker(worker, self._on_install_done)
@@ -839,6 +1148,17 @@ class MainWindow(QMainWindow):
 
     def _on_verify_done(self, health):
         self._set_busy(False)
+        self._set_verdict({
+            "working":     "Working — the driver is loaded and the adapter is ready.",
+            "rfkill":      "Blocked — the interface exists but its radio is rfkill-blocked.",
+            "no_iface":    "Almost — the module loaded but no interface appeared yet.",
+            "secure_boot": "Blocked by Secure Boot — the built module cannot load.",
+            "not_loaded":  "Built but not loaded.",
+            "not_built":   "No driver module was built for this kernel.",
+            "demo":        "Demo mode — run on Kali/Parrot to verify for real.",
+        }.get(health.verdict, "Verification finished."),
+            "good" if health.ok else ("warn" if health.verdict in
+                                      ("no_iface", "rfkill", "demo") else "bad"))
         self.log_line("\n" + verify.describe(health))
         head = {
             "working":     "✓ Working — the driver is loaded and your adapter is ready.",
@@ -907,14 +1227,21 @@ class MainWindow(QMainWindow):
                   self.btn_verify, self.btn_remove, self.btn_manage, *self._mon_btns):
             b.setEnabled(not busy)
         self.btn_install.setText("Installing…" if busy else "Install driver")
+        if busy:
+            self.progress.setRange(0, 0)          # indeterminate until step 1 lands
+            self.progress_label.setText("working…")
+            self.progress.show()
+        else:
+            self.progress.hide()
+            self.progress_label.setText("")
 
     # ---- monitor mode / injection -----------------------------------------
     def _refresh_ifaces(self, adapters):
         """Populate the interface picker from live wireless interfaces."""
         names = []
         for a in adapters:
-            i = a.interface
-            if i and i.name and i.name not in names and not i.name.startswith("("):
+            i = a.bound_interface
+            if i and i.name not in names:
                 names.append(i.name)
         cur = self.iface_combo.currentText().strip()
         self.iface_combo.blockSignals(True)
@@ -999,8 +1326,9 @@ class MainWindow(QMainWindow):
         head.setObjectName("H2")
         lay.addWidget(head)
 
-        sub = QLabel(f"Running kernel <b>{st.kernel}</b>"
-                     + (f" · Secure Boot <b>{st.secure_boot}</b>" if st.secure_boot != "unknown" else ""))
+        sub = QLabel(f"Running kernel <b>{_esc(st.kernel)}</b>"
+                     + (f" · Secure Boot <b>{_esc(st.secure_boot)}</b>"
+                        if st.secure_boot != "unknown" else ""))
         sub.setObjectName("Dim")
         sub.setTextFormat(Qt.RichText)
         lay.addWidget(sub)
@@ -1013,9 +1341,10 @@ class MainWindow(QMainWindow):
             label = "built" if ok else "NOT built — stale"
             rows.append(
                 f"<tr style='border-bottom:1px solid {T.BORDER}'>"
-                f"<td style='padding:7px 10px'><b>{m.dkms.name}</b>"
-                f"<br><span style='color:{T.DIM};font-size:11px'>v{m.dkms.version}"
-                f"{' · ' + ', '.join(m.chipsets[:2]) if m.chipsets else ''}</span></td>"
+                f"<td style='padding:7px 10px'><b>{_esc(m.dkms.name)}</b>"
+                f"<br><span style='color:{T.DIM};font-size:11px'>v{_esc(m.dkms.version)}"
+                f"{' · ' + _esc(', '.join(m.chipsets[:2])) if m.chipsets else ''}"
+                f"</span></td>"
                 f"<td style='padding:7px 10px;white-space:nowrap;color:{colour}'>{label}"
                 f"<br><span style='color:{T.DIM};font-size:11px'>"
                 f"{'loaded' if m.loaded else 'not loaded'}</span></td></tr>")
@@ -1025,7 +1354,7 @@ class MainWindow(QMainWindow):
         else:
             body = (f"<p style='color:{T.DIM}'>No DKMS-managed drivers are registered."
                     "<br>That's normal when every adapter uses an in-kernel driver.</p>")
-        msgs = "".join(f"<p style='color:{T.WARN}'>{m}</p>" for m in st.messages)
+        msgs = "".join(f"<p style='color:{T.WARN}'>{_esc(m)}</p>" for m in st.messages)
         view.setHtml(body + msgs)
         lay.addWidget(view, 1)
 
@@ -1127,7 +1456,9 @@ class MainWindow(QMainWindow):
         head.setObjectName("H2")
         lay.addWidget(head)
         search = QLineEdit()
-        search.setPlaceholderText("Filter by name, vendor, chipset id, band, or USB id (e.g. 0bda:8812)…")
+        search.setPlaceholderText("Filter by name, vendor, chipset id, band, or USB id "
+                                  "(e.g. 0bda:8812)…   —   Ctrl+F from anywhere")
+        search.setClearButtonEnabled(True)
         lay.addWidget(search)
         view = QTextBrowser()
         view.setOpenExternalLinks(True)
@@ -1144,17 +1475,26 @@ class MainWindow(QMainWindow):
                 shown += 1
                 mon_c = T.GOOD if c.monitor_mode else T.DIM
                 inj_c = T.GOOD if c.injection else T.DIM
-                path = " → ".join(d.method for d in c.best_drivers())
+                path = _esc("  →  ".join(_METHOD_WORDS.get(d.method, d.method)
+                                         for d in c.best_drivers()))
+                rank = QUALITY_RANK.get(c.injection_quality, 0) if c.injection else 0
+                bar = ("".join("█" if i < rank else "─" for i in range(4))
+                       if c.injection else "")
                 rows.append(
                     f"<tr style='border-bottom:1px solid {T.BORDER}'>"
-                    f"<td style='padding:7px 10px'><b>{c.name}</b>"
-                    f"<br><span style='color:{T.DIM};font-size:11px'>{c.id} · {c.vendor} · {c.band}</span>"
-                    f"<br><span style='color:{T.DIM};font-size:10px'>{len(c.usb_ids)} IDs · {path}</span></td>"
+                    f"<td style='padding:7px 10px'><b>{_esc(c.name)}</b>"
+                    f"<br><span style='color:{T.DIM};font-size:11px'>{_esc(c.id)} · "
+                    f"{_esc(c.vendor)} · {_esc(c.band)}</span>"
+                    f"<br><span style='color:{T.DIM};font-size:10px'>{len(c.usb_ids)} IDs"
+                    f" · {path}</span></td>"
                     f"<td style='padding:7px 10px;white-space:nowrap'>"
                     f"<span style='color:{mon_c}'>{'monitor' if c.monitor_mode else 'no monitor'}</span><br>"
                     f"<span style='color:{inj_c}'>{'injection' if c.injection else 'no injection'}</span>"
-                    f"<br><span style='color:{T.DIM};font-size:11px'>{c.injection_quality}</span></td>"
-                    f"</tr>")
+                    f"<br><span style='color:{T.DIM};font-size:11px'>"
+                    f"{_esc(c.injection_quality)}</span>"
+                    + (f"<br><span style='color:{T.ACCENT};font-size:11px;"
+                       f"letter-spacing:1px'>{bar}</span>" if bar else "")
+                    + "</td></tr>")
             body = "".join(rows) or f"<tr><td style='padding:10px;color:{T.DIM}'>No matches.</td></tr>"
             view.setHtml(f"<table width='100%' style='border-collapse:collapse'>{body}</table>")
             head.setText(f"{shown} of {len(self.db)} families shown · {self.db.usb_id_count()} USB/PCI IDs total")

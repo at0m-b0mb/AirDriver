@@ -79,7 +79,7 @@
 
   <!-- terminal one-liner -->
   <text x="96" y="284" font-family="Menlo, 'DejaVu Sans Mono', monospace" font-size="23">
-    <tspan fill="#6e7681">$ </tspan><tspan fill="#e6edf3">sudo airdriver install</tspan><tspan fill="#6e7681">    </tspan><tspan fill="#3fb950">&#10003; RTL8814AU installed &amp; verified</tspan>
+    <tspan fill="#6e7681" xml:space="preserve">$ </tspan><tspan fill="#e6edf3">sudo airdriver setup</tspan><tspan fill="#6e7681" xml:space="preserve">    </tspan><tspan fill="#3fb950">&#10003; RTL8814AU sniffing + injecting</tspan>
   </text>
 
   <!-- feature pills -->
@@ -112,7 +112,7 @@
 
   <!-- chipset families -->
   <text x="96" y="466" font-family="Menlo, 'DejaVu Sans Mono', monospace" font-size="20" fill="#8b949e">
-    <tspan fill="#cdd5df">52 chipset families</tspan> &#183; 1258 IDs &#183; Realtek &#183; Atheros &#183; MediaTek &#183; Intel &#183; Qualcomm &#183; Broadcom
+    <tspan fill="#cdd5df">58 chipset families</tspan> &#183; 1286 IDs &#183; Realtek &#183; Atheros &#183; MediaTek &#183; Intel &#183; Qualcomm &#183; Broadcom
   </text>
   <text x="96" y="498" font-family="Menlo, 'DejaVu Sans Mono', monospace" font-size="20" fill="#8b949e">
     driver path: in-kernel &#183; apt &#183; DKMS &#183; offline bundle
@@ -121,7 +121,7 @@
   <!-- footer -->
   <rect x="96" y="544" width="1088" height="1.5" fill="#283042"/>
   <text x="96" y="586" font-family="Menlo, 'DejaVu Sans Mono', monospace" font-size="19" fill="#6e7681">
-    MIT &#183; PySide6 GUI &#183; pure-stdlib core + CLI &#183; v0.8.0
+    MIT &#183; PySide6 GUI &#183; pure-stdlib core + CLI &#183; v1.0.0
   </text>
   <text x="1184" y="586" font-family="Menlo, 'DejaVu Sans Mono', monospace" font-size="19" fill="#7d8794" text-anchor="end">
     github.com/at0m-b0mb/AirDriver

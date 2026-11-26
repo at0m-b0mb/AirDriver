@@ -193,6 +193,15 @@ def run(db: ChipsetDB, *, target: Optional[str] = None, want_monitor: bool = Tru
         out.add("Detect adapter", FAIL, why, hint=why)
         return summarise(out)
     out.add("Detect adapter", OK, f"{ad.title}  ({ad.usb_id}, {ad.transport.upper()})")
+    if ad.chipset is None:
+        # Reachable whenever a target names an adapter that is plugged in but
+        # not in the database: pick_adapter matches it by usb id, and there is
+        # no chipset to reason about. Saying so beats an AttributeError.
+        why = (f"{ad.usb_id} is plugged in but is not in the chipset database, so "
+               "AirDriver does not know which driver it needs.")
+        out.add("Capability", FAIL, why,
+                hint=f"Report it so it can be added:  airdriver contribute {ad.usb_id}")
+        return summarise(out)
     chip: Chipset = ad.chipset
 
     # --- 2. can this hardware even do the job? ------------------------------
@@ -237,8 +246,17 @@ def run(db: ChipsetDB, *, target: Optional[str] = None, want_monitor: bool = Tru
     else:
         plan = build_plan(ad, info)
         log(plan.describe())
-        Executor(info, dry_run=False).run(plan, log=log)
-        out.add("Driver", OK, f"install plan ran ({plan.method})")
+        # The stage used to read "ok" regardless of what happened, which is the
+        # one thing this flow is not allowed to do. Verification below is still
+        # the authority on whether the adapter works; this line reports whether
+        # the install itself ran clean.
+        ran_clean = Executor(info, dry_run=False).run(plan, log=log)
+        if ran_clean:
+            out.add("Driver", OK, f"install plan ran clean ({plan.method})")
+        else:
+            out.add("Driver", WARN,
+                    f"the {plan.method} install finished with failed steps "
+                    "(see the log above)")
 
     # --- 5. verify it really bound -----------------------------------------
     health = verify.check(chip, info, usb_id=ad.usb_id)

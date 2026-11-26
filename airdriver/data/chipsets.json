@@ -1,9 +1,10 @@
 {
   "schema_version": 1,
-  "updated": "2026-08-27",
-  "_about": "AirDriver chipset database. Maps USB/PCI VID:PID -> chipset -> driver install strategy. 'usb_ids' are lowercase 'vid:pid' (works for PCI ids too). 'kernel_native' tells AirDriver when an in-kernel driver already exists so it can SKIP a pointless DKMS build. 'drivers' are tried in 'priority' order (1 = first). 'monitor_mode'/'injection' are honest capability flags for pentest use; some chips connect fine but can't inject. Every usb_id is unique across the whole file (enforced by tests/test_chipset_db.py). Extend freely: add entries or usb_ids and AirDriver picks them up on next scan. PRs welcome at https://github.com/at0m-b0mb/AirDriver.",
+  "updated": "2026-11-26",
+  "_about": "AirDriver chipset database. Maps USB/PCI VID:PID -> chipset -> driver install strategy. 'usb_ids' are lowercase 'vid:pid' (works for PCI ids too). 'kernel_native' tells AirDriver when an in-kernel driver already exists so it can SKIP a pointless DKMS build. 'drivers' are tried in 'priority' order (1 = first). 'monitor_mode'/'injection' are honest capability flags for pentest use; some chips connect fine but can't inject. Every usb_id is unique across the whole file (enforced by tests/test_chipset_db.py). 'prefer_out_of_tree' means an in-kernel driver exists but the out-of-tree one is what has the injection track record, so AirDriver builds it anyway (override with the in-kernel path by hand if you only need connectivity). 'contested_ids' lists vid:pids claimed by more than one kernel driver: those are deliberately absent from every chipset, because guessing installs the wrong driver. Reformat after editing with scripts/fmt_chipsets.py. Extend freely: add entries or usb_ids and AirDriver picks them up on next scan. PRs welcome at https://github.com/at0m-b0mb/AirDriver.",
   "injection_quality_scale": ["unknown", "poor", "fair", "good", "excellent"],
   "_id_sources": "USB and PCI IDs are taken from the Linux kernel's own driver device tables (rtl8xxxu, rt2800usb, rt73usb, rt2500usb, ath5k, ath9k, ath9k_htc, ath10k, ath11k, ath12k, ar5523, carl9170, zd1211rw, p54usb, mt76*, rtw88/rtw89, rtl8187, iwlwifi, brcmfmac) and the morrownr supported-device-IDs lists for out-of-tree drivers. Capability flags are grounded the same way: mac80211 always adds NL80211_IFTYPE_MONITOR (net/mac80211/main.c), whereas ath11k/ath12k clear it per-hardware via hw_params.supports_monitor and brcmfmac only sets it when the firmware reports the feature. A vid:pid claimed by more than one kernel driver is omitted rather than guessed at. Do not invent ids: a wrong id installs the wrong driver.",
+  "contested_ids": {"0471:2126": {"drivers": ["mt76x2u", "rt2800usb"], "note": "Two different in-kernel drivers claim this id, so which chip is actually inside depends on the hardware revision. Let the kernel bind whichever it recognises — confirm with 'airdriver diagnose' — and do not force a driver."}, "0e66:0020": {"drivers": ["rt2800usb", "rtl8xxxu"], "note": "Two different in-kernel drivers claim this id, so which chip is actually inside depends on the hardware revision. Let the kernel bind whichever it recognises — confirm with 'airdriver diagnose' — and do not force a driver."}, "050d:7050": {"drivers": ["p54usb", "rt2500usb", "rt73usb"], "note": "Three kernel drivers claim this Belkin F5D7050 id — the hardware revision decides (ver 1000 is p54, 2.x is rt2500usb, 3.x is rt73usb). All three are in-kernel, so the kernel picks correctly on its own; check with 'airdriver diagnose'."}, "0707:ee13": {"drivers": ["p54usb", "rt2500usb"], "note": "Two different in-kernel drivers claim this id, so which chip is actually inside depends on the hardware revision. Let the kernel bind whichever it recognises — confirm with 'airdriver diagnose' — and do not force a driver."}, "148f:760a": {"drivers": ["mt7601u", "mt76x0u"], "note": "Two different in-kernel drivers claim this id, so which chip is actually inside depends on the hardware revision. Let the kernel bind whichever it recognises — confirm with 'airdriver diagnose' — and do not force a driver."}, "7392:b711": {"drivers": ["mt76x0u", "mt76x2u"], "note": "Two different in-kernel drivers claim this id, so which chip is actually inside depends on the hardware revision. Let the kernel bind whichever it recognises — confirm with 'airdriver diagnose' — and do not force a driver."}, "13b1:0043": {"drivers": ["rtw88_8822cu (in-kernel)", "88x2bu (morrownr, out-of-tree)"], "note": "The kernel's rtw8822cu table and morrownr's 88x2bu device list both claim this Linksys id. Installing either driver blacklists the other's module, so AirDriver will not guess: run 'airdriver diagnose', see which module the kernel bound, and install that family by name (airdriver install rtl8822bu | rtl8822cu)."}},
   "chipsets": [
     {
       "id": "rtl8812au",
@@ -14,6 +15,7 @@
       "monitor_mode": true,
       "injection": true,
       "injection_quality": "good",
+      "prefer_out_of_tree": true,
       "notes": "The classic ALFA AWUS036ACH chipset. Monitor mode can get unstable after long sessions on some firmware revisions; morrownr driver is more stable than the kernel rtw88 path for injection work.",
       "adapters": [
         "ALFA AWUS036ACH", "ALFA AWUS036AC", "TP-Link Archer T4U v1", "Netgear A6210",
@@ -44,6 +46,7 @@
       "monitor_mode": true,
       "injection": true,
       "injection_quality": "fair",
+      "prefer_out_of_tree": true,
       "notes": "Smaller/cheaper AC600 sibling of the 8812au. Good for travel; lower TX power. 8811AU has no active-monitor VIF on the in-kernel path.",
       "adapters": [
         "ALFA AWUS036ACS", "TP-Link Archer T2U v1", "Edimax EW-7811UTC", "Netgear A6100",
@@ -73,6 +76,7 @@
       "monitor_mode": true,
       "injection": true,
       "injection_quality": "good",
+      "prefer_out_of_tree": true,
       "notes": "High-power 4-antenna beast (ALFA AWUS1900). Draws a lot of current — use a powered hub on SBCs. In-kernel rtw88 support landed 6.15 / optimized 6.16.",
       "adapters": ["ALFA AWUS1900", "ALFA AWUS036ACA"],
       "usb_ids": [
@@ -105,7 +109,7 @@
       "usb_ids": [
         "0bda:2006", "0bda:8731", "0bda:8811", "0bda:b820", "0bda:b82b", "0bda:c80c",
         "0bda:c811", "0bda:c820", "0bda:c821", "0bda:c82a", "0bda:c82b", "0bda:c830",
-        "2001:331d", "7392:c811", "7392:d811"
+        "2001:331d", "2c4e:0105", "7392:c811", "7392:d811"
       ],
       "kernel_native": null,
       "drivers": [
@@ -167,6 +171,7 @@
       "monitor_mode": true,
       "injection": true,
       "injection_quality": "fair",
+      "prefer_out_of_tree": true,
       "notes": "Decent 2.4 GHz-only option. The in-kernel rtl8xxxu works for connectivity but the DKMS driver is more reliable for injection.",
       "adapters": ["TP-Link TL-WN822N v4/v5", "Edimax EW-7612U"],
       "usb_ids": [
@@ -298,9 +303,8 @@
       "usb_ids": [
         "04bb:0951", "057c:8502", "0586:3425", "07b8:7610", "0b05:17d1", "0b05:17db",
         "0df6:0075", "0df6:0079", "0e8d:7610", "0e8d:7630", "0e8d:7650", "13b1:003e",
-        "148f:760a", "148f:7610", "148f:761a", "2001:3d02", "2019:ab31", "20f4:806b",
-        "2357:0105", "2357:010b", "2357:0123", "293c:5702", "7392:a711", "7392:b711",
-        "7392:c711"
+        "148f:7610", "148f:761a", "2001:3d02", "2019:ab31", "20f4:806b", "2357:0105",
+        "2357:010b", "2357:0123", "293c:5702", "7392:a711", "7392:c711"
       ],
       "kernel_native": {"module": "mt76x0u", "min_kernel": "4.19", "recommended_kernel": "5.4"},
       "drivers": [
@@ -320,9 +324,9 @@
       "notes": "Top pick for modern pentest work: excellent in-kernel mt76x2u driver, very stable monitor mode, high injection success. No DKMS needed.",
       "adapters": ["ALFA AWUS036ACM", "Panda PAU0D", "Netgear A6150"],
       "usb_ids": [
-        "045e:02e6", "045e:02fe", "0471:2126", "0471:7600", "056e:400a", "057c:8503",
-        "0846:9014", "0846:9053", "0b05:17eb", "0b05:180b", "0b05:1833", "0e8d:7612",
-        "0e8d:7632", "0e8d:7662", "2357:0137", "2c4e:0103"
+        "045e:02e6", "045e:02fe", "0471:7600", "056e:400a", "057c:8503", "0846:9014",
+        "0846:9053", "0b05:17eb", "0b05:180b", "0b05:1833", "0e8d:7612", "0e8d:7632",
+        "0e8d:7662", "2357:0137", "2c4e:0103"
       ],
       "kernel_native": {"module": "mt76x2u", "min_kernel": "4.19", "recommended_kernel": "5.4"},
       "drivers": [
@@ -375,6 +379,7 @@
       "monitor_mode": true,
       "injection": true,
       "injection_quality": "fair",
+      "prefer_out_of_tree": true,
       "notes": "Newer Realtek WiFi 6 USB chip. Mainline rtw89 support landed in kernel 6.17 (rtw89_8852bu); on older kernels use the morrownr DKMS driver. Monitor/injection maturing.",
       "adapters": ["ALFA AWUS036AXM", "Generic AX1800 USB"],
       "usb_ids": [
@@ -399,6 +404,7 @@
       "monitor_mode": true,
       "injection": true,
       "injection_quality": "fair",
+      "prefer_out_of_tree": true,
       "notes": "Realtek WiFi 6E USB. Mainline rtw89 support landed in kernel 6.19 (rtw89_8852cu); on older kernels use the morrownr DKMS driver.",
       "adapters": ["Generic AXE USB"],
       "usb_ids": ["0bda:c832", "0bda:c85c"],
@@ -428,11 +434,10 @@
       "usb_ids": [
         "0411:03d0", "0411:03d1", "04ca:8602", "056e:4011", "0846:9055", "0b05:1841",
         "0b05:184c", "0b05:1870", "0b05:1874", "0b05:19aa", "0bda:2102", "0bda:b812",
-        "0bda:b81a", "0bda:b82c", "0e66:0025", "13b1:0043", "13b1:0045", "2001:331c",
-        "2001:331e", "2001:331f", "2001:3322", "20f4:805a", "20f4:808a", "2357:0115",
-        "2357:0116", "2357:0117", "2357:0125", "2357:012d", "2357:012e", "2357:0138",
-        "2c4e:0107", "2c4e:010a", "7392:b822", "7392:c822", "7392:d822", "7392:e822",
-        "7392:f822"
+        "0bda:b81a", "0bda:b82c", "0e66:0025", "13b1:0045", "2001:331c", "2001:331e",
+        "2001:331f", "2001:3322", "20f4:805a", "20f4:808a", "2357:0115", "2357:0116",
+        "2357:0117", "2357:0125", "2357:012d", "2357:012e", "2357:0138", "2c4e:0107",
+        "2c4e:010a", "7392:b822", "7392:c822", "7392:d822", "7392:e822", "7392:f822"
       ],
       "kernel_native": null,
       "drivers": [
@@ -462,12 +467,12 @@
         "0bda:5088", "0bda:8170", "0bda:8176", "0bda:8177", "0bda:8178", "0bda:817a",
         "0bda:817b", "0bda:817c", "0bda:817d", "0bda:817e", "0bda:817f", "0bda:8186",
         "0bda:818a", "0bda:8191", "0bda:819a", "0bda:8754", "0df6:0052", "0df6:005c",
-        "0df6:0061", "0df6:0070", "0df6:0077", "0e66:0019", "0e66:0020", "0eb0:9071",
-        "103c:1629", "1058:0631", "13d3:3357", "13d3:3358", "13d3:3359", "2001:3307",
-        "2001:3308", "2001:3309", "2001:330a", "2001:330b", "2001:330d", "2019:1201",
-        "2019:4902", "2019:ab2a", "2019:ab2b", "2019:ab2e", "2019:ed17", "20f4:624d",
-        "20f4:648b", "2357:0100", "4855:0090", "4855:0091", "4856:0091", "7392:7811",
-        "7392:7822", "9846:9041", "cdab:8010"
+        "0df6:0061", "0df6:0070", "0df6:0077", "0e66:0019", "0eb0:9071", "103c:1629",
+        "1058:0631", "13d3:3357", "13d3:3358", "13d3:3359", "2001:3307", "2001:3308",
+        "2001:3309", "2001:330a", "2001:330b", "2001:330d", "2019:1201", "2019:4902",
+        "2019:ab2a", "2019:ab2b", "2019:ab2e", "2019:ed17", "20f4:624d", "20f4:648b",
+        "2357:0100", "4855:0090", "4855:0091", "4856:0091", "7392:7811", "7392:7822",
+        "9846:9041", "cdab:8010"
       ],
       "kernel_native": {"module": "rtl8xxxu", "min_kernel": "4.0", "recommended_kernel": "5.10"},
       "drivers": [
@@ -576,7 +581,7 @@
         "07d1:3a09", "07d1:3a0f", "07d1:3c10", "083a:f522", "0846:9001", "0846:9010",
         "0846:9040", "0ace:1221", "0cde:0023", "0cde:0026", "0cde:0027", "0cf3:1001",
         "0cf3:1002", "0cf3:1010", "0cf3:1011", "0cf3:9170", "1435:0326", "1435:0804",
-        "1668:1200", "1740:0605", "1b75:9170", "2019:5304", "cace:0300"
+        "1668:1200", "1b75:9170", "2019:5304", "cace:0300"
       ],
       "kernel_native": {"module": "carl9170", "min_kernel": "2.6.37", "recommended_kernel": "any", "firmware": "carl9170-1.fw"},
       "drivers": [
@@ -748,21 +753,21 @@
         "14b2:3c27", "14b2:3c28", "14b2:3c2c", "157e:300e", "157e:3013", "15a9:0006",
         "15a9:0010", "15a9:0012", "15c5:0008", "167b:4001", "1690:0740", "1690:0744",
         "1690:0761", "1690:0764", "1737:0070", "1737:0071", "1737:0079", "1740:0600",
-        "1740:0602", "1740:0615", "1740:9701", "1740:9702", "1740:9703", "1740:9705",
-        "1740:9706", "1740:9707", "1740:9708", "1740:9709", "1740:9801", "1761:0b05",
-        "177f:0153", "177f:0163", "177f:0164", "177f:0165", "177f:0254", "177f:0302",
-        "177f:0313", "177f:0323", "177f:0324", "177f:1163", "18c5:0008", "18c5:0012",
-        "18e8:6259", "1a32:0304", "1b75:3070", "1b75:3071", "1b75:3072", "1b75:7733",
-        "1b75:a200", "1d4d:0002", "1d4d:000c", "1d4d:000e", "1d4d:0010", "1d4d:0011",
-        "1eda:2012", "1eda:2210", "1eda:2310", "2001:3317", "2001:3c15", "2001:3c17",
-        "2001:3c19", "2001:3c1a", "2001:3c1b", "2001:3c1c", "2001:3c1d", "2001:3c1e",
-        "2001:3c1f", "2001:3c20", "2001:3c21", "2001:3c22", "2001:3c23", "2001:3c25",
-        "2019:5201", "2019:ab24", "2019:ab25", "2019:ab29", "2019:ed06", "2019:ed14",
-        "2019:ed19", "203d:1480", "203d:14a1", "203d:14a9", "20b8:8888", "20f4:724a",
-        "5a57:0280", "5a57:0282", "5a57:0283", "5a57:0284", "5a57:5257", "7392:4085",
-        "7392:7711", "7392:7717", "7392:7718", "7392:7722", "7392:7733", "8516:2070",
-        "8516:2770", "8516:2870", "8516:3070", "8516:3071", "8516:3072", "8516:3572",
-        "f201:5370"
+        "1740:0602", "1740:0605", "1740:0615", "1740:9701", "1740:9702", "1740:9703",
+        "1740:9705", "1740:9706", "1740:9707", "1740:9708", "1740:9709", "1740:9801",
+        "1761:0b05", "177f:0153", "177f:0163", "177f:0164", "177f:0165", "177f:0254",
+        "177f:0302", "177f:0313", "177f:0323", "177f:0324", "177f:1163", "18c5:0008",
+        "18c5:0012", "18e8:6259", "1a32:0304", "1b75:3070", "1b75:3071", "1b75:3072",
+        "1b75:7733", "1b75:a200", "1d4d:0002", "1d4d:000c", "1d4d:000e", "1d4d:0010",
+        "1d4d:0011", "1eda:2012", "1eda:2210", "1eda:2310", "2001:3317", "2001:3c15",
+        "2001:3c17", "2001:3c19", "2001:3c1a", "2001:3c1b", "2001:3c1c", "2001:3c1d",
+        "2001:3c1e", "2001:3c1f", "2001:3c20", "2001:3c21", "2001:3c22", "2001:3c23",
+        "2001:3c25", "2019:5201", "2019:ab24", "2019:ab25", "2019:ab29", "2019:ed06",
+        "2019:ed14", "2019:ed19", "203d:1480", "203d:14a1", "203d:14a9", "20b8:8888",
+        "20f4:724a", "5a57:0280", "5a57:0282", "5a57:0283", "5a57:0284", "5a57:5257",
+        "7392:4085", "7392:7711", "7392:7717", "7392:7718", "7392:7722", "7392:7733",
+        "8516:2070", "8516:2770", "8516:2870", "8516:3070", "8516:3071", "8516:3072",
+        "8516:3572", "f201:5370"
       ],
       "kernel_native": {"module": "rt2800usb", "min_kernel": "2.6.31", "recommended_kernel": "any"},
       "drivers": [
@@ -915,7 +920,11 @@
       "injection_quality": "fair",
       "notes": "MediaTek's internal counterpart to the MT7921AU dongles, common in AMD laptops. Unusually for an internal card, the mt76 driver supports active monitor mode and some injection — easily the best built-in option after ath9k. In-kernel from 5.15 (MT7921E) / 6.7 (MT7925E).",
       "adapters": ["MediaTek MT7921E", "MediaTek MT7922 (RZ616)", "MediaTek MT7925E (RZ717)"],
-      "usb_ids": ["14c3:0608", "14c3:0616", "14c3:7961", "14c3:0717"],
+      "usb_ids": [
+        "0b48:7922", "14c3:0608", "14c3:0616", "14c3:0717", "14c3:0738", "14c3:6639",
+        "14c3:7902", "14c3:7920", "14c3:7922", "14c3:7925", "14c3:7927", "14c3:7928",
+        "14c3:7935", "14c3:7961"
+      ],
       "kernel_native": {"module": "mt7921e", "min_kernel": "5.15", "recommended_kernel": "6.6"},
       "drivers": [
         {"method": "kernel_native", "module": "mt7921e", "priority": 1}
@@ -1244,6 +1253,119 @@
       "kernel_native": {"module": "brcmfmac", "min_kernel": "3.9", "recommended_kernel": "5.10", "firmware": "brcmfmac firmware (linux-firmware)"},
       "drivers": [
         {"method": "kernel_native", "module": "brcmfmac", "priority": 1, "firmware_pkg": "firmware-brcm80211"}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "rtl8822cu",
+      "name": "Realtek RTL8822CU / RTL8822CS",
+      "vendor": "Realtek",
+      "wifi": "WiFi 5 (802.11ac)",
+      "band": "Dual-band AC1200 (2.4 + 5 GHz)",
+      "monitor_mode": true,
+      "injection": false,
+      "injection_quality": "unknown",
+      "notes": "The USB sibling of the very common RTL8822CE laptop card, sold in AC1200 dongles and built into some SBCs. In-kernel from 6.2 as rtw88_8822cu: rtw88 is mac80211-based, so monitor mode is offered; injection has no track record here, so it is not claimed. The Linksys id 13b1:0043 is claimed by both this driver and morrownr's 88x2bu list, so it is in 'contested_ids' rather than guessed at.",
+      "adapters": [
+        "Linksys WUSB6400M", "D-Link DWA-181", "generic AC1200 dongles",
+        "Rock Pi / Orange Pi onboard modules"
+      ],
+      "usb_ids": ["0bda:c812", "0bda:c82c", "0bda:c82e", "0bda:d820", "0bda:d82b", "2001:3329"],
+      "kernel_native": {"module": "rtw88_8822cu", "min_kernel": "6.2", "recommended_kernel": "6.6"},
+      "drivers": [
+        {"method": "kernel_native", "module": "rtw88_8822cu", "priority": 1},
+        {"method": "dkms_git", "repo": "https://github.com/lwfinger/rtw88", "module": "rtw88_8822cu", "priority": 2}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "rtl8723du",
+      "name": "Realtek RTL8723DU (WiFi + BT combo)",
+      "vendor": "Realtek",
+      "wifi": "WiFi 4 (802.11n)",
+      "band": "Single-band 2.4 GHz",
+      "monitor_mode": true,
+      "injection": false,
+      "injection_quality": "poor",
+      "notes": "A cheap 2.4 GHz WiFi+Bluetooth combo found in budget dongles and mini PCs, and until now reported by AirDriver as unknown. In-kernel from 6.2 as rtw88_8723du. Monitor mode is offered (rtw88 is mac80211-based) but this is a single-stream 2.4 GHz part with no injection track record — it is here so AirDriver can get you online, not so you can attack with it.",
+      "adapters": ["generic WiFi+BT combo dongles", "Realtek RTL8723DU mini-PC modules"],
+      "usb_ids": ["0bda:d723", "7392:d611"],
+      "kernel_native": {"module": "rtw88_8723du", "min_kernel": "6.2", "recommended_kernel": "6.6"},
+      "drivers": [
+        {"method": "kernel_native", "module": "rtw88_8723du", "priority": 1},
+        {"method": "dkms_git", "repo": "https://github.com/lwfinger/rtw88", "module": "rtw88_8723du", "priority": 2}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "mt7663u",
+      "name": "MediaTek MT7663U / MT7668AU",
+      "vendor": "MediaTek",
+      "wifi": "WiFi 5 (802.11ac)",
+      "band": "Dual-band AC (2.4 + 5 GHz)",
+      "monitor_mode": true,
+      "injection": false,
+      "injection_quality": "unknown",
+      "notes": "MediaTek's AC dual-band USB part, in-kernel since 5.8 via mt76's mt7663u driver (it needs the mt7663 firmware from linux-firmware). mt76 is mac80211-based so monitor mode is offered; unlike its MT7612U cousin this one has no injection track record, so none is claimed.",
+      "adapters": ["LG USB WiFi module", "generic MT7663U dongles"],
+      "usb_ids": ["043e:310c", "0e8d:7663"],
+      "kernel_native": {"module": "mt7663u", "min_kernel": "5.8", "recommended_kernel": "6.1", "firmware": "mediatek/mt7663* (linux-firmware)"},
+      "drivers": [
+        {"method": "kernel_native", "module": "mt7663u", "firmware_pkg": "firmware-misc-nonfree", "priority": 1}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "mt7915_pci",
+      "name": "MediaTek MT7915 / MT7916 / MT7906 (PCIe / M.2)",
+      "vendor": "MediaTek",
+      "wifi": "WiFi 6 (802.11ax)",
+      "band": "Dual-band AX (2.4 + 5 GHz)",
+      "monitor_mode": true,
+      "injection": false,
+      "injection_quality": "unknown",
+      "notes": "MediaTek's AP-class Wi-Fi 6 silicon, sold as miniPCIe/M.2 cards and built into OpenWrt routers — people do put these in laptops and SBCs. In-kernel mt7915e from 5.11 (MT7916 from 5.19); needs the mt7915 firmware from linux-firmware. mac80211, so monitor mode is offered; injection is not claimed without a track record.",
+      "adapters": ["MT7915 miniPCIe / M.2 cards", "Mercusys / ASUS AX3000 modules", "MT7916 M.2 cards"],
+      "usb_ids": ["14c3:7906", "14c3:7915", "14c3:7916", "14c3:790a"],
+      "kernel_native": {"module": "mt7915e", "min_kernel": "5.11", "recommended_kernel": "6.6", "firmware": "mediatek/mt7915* (linux-firmware)"},
+      "drivers": [
+        {"method": "kernel_native", "module": "mt7915e", "firmware_pkg": "firmware-misc-nonfree", "priority": 1}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "mt7996_pci",
+      "name": "MediaTek MT7996 / MT7992 / MT7990 (WiFi 7 PCIe)",
+      "vendor": "MediaTek",
+      "wifi": "WiFi 7 (802.11be)",
+      "band": "Tri-band BE (2.4 + 5 + 6 GHz)",
+      "monitor_mode": true,
+      "injection": false,
+      "injection_quality": "unknown",
+      "notes": "MediaTek's Wi-Fi 7 AP silicon. Support landed progressively — MT7996 first, MT7992 and MT7990 later — so run a recent kernel and recent linux-firmware or the card will not come up at all. mac80211 means monitor mode is offered; nothing about injection is claimed.",
+      "adapters": ["MT7996 M.2 / miniPCIe cards", "MT7992 (BE6500) modules", "MT7990 modules"],
+      "usb_ids": ["14c3:7990", "14c3:7991", "14c3:7992", "14c3:7993", "14c3:799a", "14c3:799b"],
+      "kernel_native": {"module": "mt7996e", "min_kernel": "6.6", "recommended_kernel": "6.12", "firmware": "mediatek/mt7996* (linux-firmware)"},
+      "drivers": [
+        {"method": "kernel_native", "module": "mt7996e", "firmware_pkg": "firmware-misc-nonfree", "priority": 1}
+      ],
+      "blacklist": []
+    },
+    {
+      "id": "rsi_91x",
+      "name": "Redpine / Silicon Labs RS9113 / RS9116",
+      "vendor": "Redpine Signals (Silicon Labs)",
+      "wifi": "WiFi 4 (802.11n)",
+      "band": "Dual-band N (2.4 + 5 GHz)",
+      "monitor_mode": true,
+      "injection": false,
+      "injection_quality": "unknown",
+      "notes": "An unusual dual-band 802.11n USB part used in embedded and industrial gear rather than consumer dongles, driven in-kernel by rsi_91x (needs the rsi firmware from linux-firmware). mac80211, so monitor mode is offered; no injection track record, so none is claimed. Here mainly so AirDriver identifies it instead of shrugging.",
+      "adapters": ["Redpine RS9113 USB modules", "Silicon Labs RS9116 evaluation boards"],
+      "usb_ids": ["1618:9113", "1618:9116"],
+      "kernel_native": {"module": "rsi_91x", "min_kernel": "4.7", "recommended_kernel": "5.10", "firmware": "rsi/rs911x* (linux-firmware)"},
+      "drivers": [
+        {"method": "kernel_native", "module": "rsi_usb", "firmware_pkg": "firmware-misc-nonfree", "priority": 1}
       ],
       "blacklist": []
     }

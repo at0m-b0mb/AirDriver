@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import os
 import platform
+import tempfile
 from dataclasses import asdict, is_dataclass
 from datetime import datetime
 from pathlib import Path
@@ -15,10 +16,55 @@ from .system import SystemInfo
 from ..version import __version__
 
 
+def _invoking_user() -> tuple[Path, int, int]:
+    """(home, uid, gid) of the human who ran AirDriver.
+
+    Almost every useful AirDriver command is run with sudo, and sudo resets
+    HOME to /root. A report written to /root/.airdriver is a report the person
+    who asked for it cannot open, which defeats the point of writing one. When
+    SUDO_USER is set we write into *their* home and hand the files back to
+    them, so "Export report" produces a file they can actually attach.
+    """
+    user = os.environ.get("SUDO_USER")
+    here = Path(os.path.expanduser("~"))
+    if not user or not hasattr(os, "geteuid") or os.geteuid() != 0:
+        return here, -1, -1
+    try:
+        import pwd
+        pw = pwd.getpwnam(user)
+    except (ImportError, KeyError):
+        return here, -1, -1
+    return Path(pw.pw_dir), pw.pw_uid, pw.pw_gid
+
+
 def report_dir() -> Path:
-    d = Path(os.path.expanduser("~/.airdriver/reports"))
-    d.mkdir(parents=True, exist_ok=True)
+    home, uid, gid = _invoking_user()
+    d = home / ".airdriver" / "reports"
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        # An unwritable home (an odd sudo setup, a read-only mount) must not
+        # stop a diagnostic from being produced at all.
+        d = Path(tempfile.gettempdir()) / "airdriver-reports"
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+    if uid >= 0:
+        for path in (home / ".airdriver", d):
+            try:
+                os.chown(path, uid, gid)
+            except OSError:
+                pass
     return d
+
+
+def _hand_back(path: Path) -> None:
+    """Make a freshly written report belong to the user, not to root."""
+    _home, uid, gid = _invoking_user()
+    if uid >= 0:
+        try:
+            os.chown(path, uid, gid)
+        except OSError:
+            pass
 
 
 def _adapter_dict(a: Adapter) -> dict:
@@ -81,9 +127,11 @@ def save(rep: dict, fmt: str = "both") -> list[Path]:
     if fmt in ("json", "both"):
         p = report_dir() / f"airdriver-{stamp}.json"
         p.write_text(json.dumps(rep, indent=2, default=str))
+        _hand_back(p)
         out.append(p)
     if fmt in ("md", "both"):
         p = report_dir() / f"airdriver-{stamp}.md"
         p.write_text(to_markdown(rep))
+        _hand_back(p)
         out.append(p)
     return out

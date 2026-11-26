@@ -16,6 +16,7 @@ import os
 import re
 import shlex
 import subprocess
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
@@ -116,7 +117,8 @@ def _feasible(option: DriverOption, sysinfo: SystemInfo) -> tuple[bool, str]:
 
 
 def select_driver(chipset: Chipset, sysinfo: SystemInfo,
-                  force_dkms: bool = False, prefer_offline: bool = False):
+                  force_dkms: bool = False, prefer_offline: bool = False,
+                  prefer_kernel: bool = False):
     """Return (DriverOption-or-None, reason_string).
 
     If a usable in-kernel driver already exists for this kernel, we prefer it and
@@ -131,13 +133,39 @@ def select_driver(chipset: Chipset, sysinfo: SystemInfo,
         # On Linux we double-check the module truly exists for this kernel.
         and (not sysinfo.is_linux or module_available(kn.module))
     )
-    if native_ready:
-        return None, (f"In-kernel driver '{kn.module}' is available on kernel "
-                      f"{sysinfo.kernel_release} (>= {kn.min_kernel}) — no build needed.")
 
     options = chipset.best_drivers()
     if prefer_offline:
         options = sorted(options, key=lambda o: (o.method != "offline", o.priority))
+    out_of_tree = [o for o in options if o.method != "kernel_native"]
+
+    # The in-kernel driver is normally the best answer: no build, no DKMS, and
+    # nothing to rebuild after a kernel upgrade. For a handful of chips it is
+    # the *wrong* answer, because the maintained out-of-tree driver is the one
+    # with the injection track record — and injection is the reason somebody
+    # bought an AWUS036ACH rather than any other dongle. Those chips carry
+    # `prefer_out_of_tree` in the database, and for them a usable in-kernel
+    # driver is a fallback rather than the destination.
+    if native_ready and chipset.prefer_out_of_tree and not prefer_kernel:
+        for opt in out_of_tree:
+            ok, _why = _feasible(opt, sysinfo)
+            if ok:
+                return opt, (
+                    f"In-kernel '{kn.module}' exists on kernel {sysinfo.kernel_release}, "
+                    f"but {chipset.name} injects reliably only with the out-of-tree "
+                    f"driver — building that instead ('{opt.method}'). Pass "
+                    "--prefer-kernel if you only need to get online.")
+        # Nothing buildable right now (offline, no bundle): the in-kernel driver
+        # beats no driver, and saying why beats silence.
+        return None, (
+            f"In-kernel driver '{kn.module}' is available on kernel "
+            f"{sysinfo.kernel_release} — using it. (The out-of-tree driver is "
+            "better for injection on this chipset, but nothing buildable is "
+            "available right now.)")
+
+    if native_ready:
+        return None, (f"In-kernel driver '{kn.module}' is available on kernel "
+                      f"{sysinfo.kernel_release} (>= {kn.min_kernel}) — no build needed.")
 
     tried = []
     for opt in options:
@@ -280,12 +308,14 @@ def _apt_step(chip: Chipset, option: DriverOption, sysinfo: SystemInfo) -> Step:
 
 
 def build_plan(adapter: Adapter, sysinfo: SystemInfo, *,
-               force_dkms: bool = False, prefer_offline: bool = False) -> InstallPlan:
+               force_dkms: bool = False, prefer_offline: bool = False,
+               prefer_kernel: bool = False) -> InstallPlan:
     chip = adapter.chipset
     if chip is None:
         raise ValueError("Cannot build a plan for an unidentified adapter.")
 
-    option, reason = select_driver(chip, sysinfo, force_dkms, prefer_offline)
+    option, reason = select_driver(chip, sysinfo, force_dkms, prefer_offline,
+                                   prefer_kernel=prefer_kernel)
     plan = InstallPlan(adapter=adapter, chipset=chip,
                        method=(option.method if option else "kernel_native"),
                        summary=reason)
@@ -354,6 +384,12 @@ def build_plan(adapter: Adapter, sysinfo: SystemInfo, *,
         steps.append(_dkms_step_git(option))
     elif option.method == "offline":
         src = offline_source_dir(option)
+        if src is None:
+            plan.warnings.append(
+                f"The bundled driver for {option.path!r} is no longer present. "
+                "Run scripts/fetch_offline_drivers.sh, or install online instead.")
+            steps.append(Step(title="Bundled offline driver is missing", kind="note"))
+            return plan
         steps.append(_dkms_step_offline(option, src))
 
     # --- Conflicts, depmod, load, bring-up ---------------------------------
@@ -514,10 +550,20 @@ def build_remove_plan(chip: Chipset, sysinfo: SystemInfo) -> InstallPlan:
 # --------------------------------------------------------------------------- #
 # Execution                                                                   #
 # --------------------------------------------------------------------------- #
+#: How long a single step may run before it is stopped. A DKMS build of a big
+#: Realtek driver on a slow laptop genuinely takes several minutes, so the
+#: ceiling is generous — it exists to end a step that is *stuck* (a command that
+#: decided to ask a question, a git clone against a dead mirror), not to hurry a
+#: compile. Without it an install hangs with no output and no way back.
+STEP_TIMEOUT = 45 * 60
+
+
 class Executor:
-    def __init__(self, sysinfo: SystemInfo, dry_run: bool = False):
+    def __init__(self, sysinfo: SystemInfo, dry_run: bool = False,
+                 step_timeout: int = STEP_TIMEOUT):
         self.sysinfo = sysinfo
         self.dry_run = dry_run
+        self.step_timeout = step_timeout
 
     # `sudo` only when it starts a command: line start, or after ; && || | ( or
     # a shell keyword. A blanket str.replace("sudo ", "") also rewrote the word
@@ -585,13 +631,37 @@ class Executor:
         return ok
 
     def _run_shell(self, shell: str, log: LogFn) -> int:
+        # stdin is closed: every command in a plan is non-interactive by
+        # construction (apt gets -y, the driver installers get NoPrompt), so a
+        # step that asks a question would otherwise sit there forever waiting
+        # for input that nobody is going to type — in the GUI, invisibly.
         proc = subprocess.Popen(["bash", "-c", shell], stdout=subprocess.PIPE,
-                                stderr=subprocess.STDOUT, text=True, bufsize=1)
+                                stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+                                text=True, bufsize=1)
         assert proc.stdout is not None
+        deadline = time.monotonic() + self.step_timeout
         for line in proc.stdout:
             log("  " + line.rstrip())
-        proc.wait()
+            if time.monotonic() > deadline:
+                log(f"  ✗ step exceeded {self.step_timeout // 60} minutes — stopping it.")
+                self._kill(proc, log)
+                return 124
+        try:
+            proc.wait(timeout=max(1.0, deadline - time.monotonic()))
+        except subprocess.TimeoutExpired:
+            log(f"  ✗ step exceeded {self.step_timeout // 60} minutes — stopping it.")
+            self._kill(proc, log)
+            return 124
         return proc.returncode
+
+    @staticmethod
+    def _kill(proc: "subprocess.Popen", log: LogFn) -> None:
+        proc.terminate()
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            log("  (had to kill it)")
 
     def _write_file(self, step: Step, log: LogFn) -> None:
         path, content = step.path, step.content or ""
@@ -603,5 +673,7 @@ class Executor:
                 raise RuntimeError(f"could not write {path}: {p.stderr.strip()}")
         else:
             log(f"  writing {path}")
-            os.makedirs(os.path.dirname(path), exist_ok=True)
+            parent = os.path.dirname(path)
+            if parent:
+                os.makedirs(parent, exist_ok=True)
             Path(path).write_text(content)
