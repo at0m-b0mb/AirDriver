@@ -9,11 +9,23 @@ on:
 jobs:
   core:
     name: core + CLI (stdlib only, py${{ matrix.python }})
-    runs-on: ubuntu-latest
+    # Pinned per Python version rather than tracking `ubuntu-latest`. When the
+    # label rolled to 26.04 the 3.9 job started failing with "version 3.9 was
+    # not found for Ubuntu 26.04" — an infrastructure change, not a code one,
+    # that turned the badge red. Kali and Parrot still ship 3.9, so dropping it
+    # from the matrix would be testing a Python our users do not have; the fix
+    # is to run the old interpreters on a runner that still carries them.
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
-        python: ["3.9", "3.11", "3.13"]
+        include:
+          - python: "3.9"
+            runner: ubuntu-22.04
+          - python: "3.11"
+            runner: ubuntu-22.04
+          - python: "3.13"
+            runner: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -21,11 +33,15 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Validate the chipset database
         run: python -m airdriver db --check
+      - name: Check the database is formatted
+        # A reformatted chipsets.json turns a one-line change into a 1 200-line
+        # diff, which is how a wrong vid:pid gets through review unnoticed.
+        run: python3 scripts/fmt_chipsets.py --check
       - name: Run the test suite (no dependencies)
         run: python -m unittest discover -s tests -v
 
   gui:
-    name: GUI import smoke (PySide6, offscreen)
+    name: GUI tests (PySide6, offscreen)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -40,7 +56,17 @@ jobs:
             libegl1 libgl1 libglib2.0-0 libdbus-1-3 libxkbcommon0 fontconfig
       - name: Install with the GUI extra
         run: pip install -e ".[gui]"
-      - name: Import + build the window headlessly
+      - name: Run the full suite, including the Qt tests
+        # These are the tests that are skipped on the stdlib runners. They
+        # matter because an exception raised inside a Qt slot never reaches the
+        # caller — Qt catches it and carries on, so a panel that blew up
+        # half-way through drawing still "renders" and a naive test passes.
+        # tests/test_gui_smoke.py installs a collecting excepthook and asserts.
+        env:
+          QT_QPA_PLATFORM: offscreen
+          AIRDRIVER_FORCE_GUI: "1"
+        run: python -m unittest discover -s tests -v
+      - name: Build the window headlessly and check the database did not shrink
         env:
           QT_QPA_PLATFORM: offscreen
           AIRDRIVER_FORCE_GUI: "1"
@@ -59,6 +85,8 @@ jobs:
               app.processEvents()   # let the scan worker finish, then tear down cleanly
           w.grab()
           w.close()
-          assert len(w.db) >= 52, "chipset database shrank unexpectedly"
+          assert len(w.db) >= 58, "chipset database shrank unexpectedly"
+          assert w.db.usb_id_count() >= 1286, "the database lost USB/PCI ids"
+          assert not w.db.load_warnings, w.db.load_warnings
           print("GUI OK — families:", len(w.db), "ids:", w.db.usb_id_count())
           PY
